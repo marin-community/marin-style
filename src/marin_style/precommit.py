@@ -23,8 +23,8 @@ import click
 
 from marin_style.lint_review import LINT_REVIEW_AGENT_DEFAULT, run_lint_review
 
-RUFF_VERSION = "ruff@0.14.3"
-BLACK_VERSION = "black@25.9.0"
+DEFAULT_RUFF_VERSION = "0.14.3"
+DEFAULT_BLACK_VERSION = "25.9.0"
 PYREFLY_SPEC = "pyrefly>=1.0.0,<1.1.0"
 
 # Built-in exclude globs, matched against repo-relative paths. A repo's own
@@ -58,7 +58,7 @@ EXCLUDE_PATTERNS = [
 
 ALL_CHECKS = ("ruff-check", "ruff-format", "black", "typecheck", "license-header")
 DEFAULT_CHECKS = ["ruff-check", "ruff-format"]
-KNOWN_CONFIG_KEYS = {"checks", "include", "exclude", "license_header", "main_branch"}
+KNOWN_CONFIG_KEYS = {"checks", "include", "exclude", "license_header", "main_branch", "ruff_version", "black_version"}
 
 
 @dataclass(frozen=True)
@@ -71,6 +71,8 @@ class StyleConfig:
     exclude: list[str]
     license_header: pathlib.Path | None
     main_branch: str
+    ruff_version: str
+    black_version: str
 
 
 def _repo_root() -> pathlib.Path:
@@ -118,6 +120,8 @@ def load_config(root: pathlib.Path) -> StyleConfig:
         exclude=list(table.get("exclude", [])),
         license_header=license_header,
         main_branch=table.get("main_branch", "main"),
+        ruff_version=table.get("ruff_version", DEFAULT_RUFF_VERSION),
+        black_version=table.get("black_version", DEFAULT_BLACK_VERSION),
     )
 
 
@@ -213,7 +217,7 @@ def check_ruff_check(files: list[pathlib.Path], fix: bool, config: StyleConfig) 
     py_files = _python_files(files)
     if not py_files:
         return 0
-    args = ["uvx", RUFF_VERSION, "check"]
+    args = ["uvx", f"ruff@{config.ruff_version}", "check"]
     if fix:
         args.extend(["--fix", "--exit-non-zero-on-fix"])
     args.extend(str(f.relative_to(config.root)) for f in py_files)
@@ -226,7 +230,7 @@ def check_ruff_format(files: list[pathlib.Path], fix: bool, config: StyleConfig)
     if not py_files:
         return 0
     file_args = [str(f.relative_to(config.root)) for f in py_files]
-    args = ["uvx", RUFF_VERSION, "format"]
+    args = ["uvx", f"ruff@{config.ruff_version}", "format"]
     if not fix:
         args.append("--check")
     args.extend(file_args)
@@ -239,7 +243,7 @@ def check_black(files: list[pathlib.Path], fix: bool, config: StyleConfig) -> in
     if not py_files:
         return 0
     file_args = [str(f.relative_to(config.root)) for f in py_files]
-    args = ["uvx", BLACK_VERSION, "--check"]
+    args = ["uvx", f"black@{config.black_version}", "--check"]
     if fix:
         args.append("--diff")
     args.extend(file_args)
@@ -247,7 +251,7 @@ def check_black(files: list[pathlib.Path], fix: bool, config: StyleConfig) -> in
     output = (result.stdout + result.stderr).strip()
 
     if result.returncode != 0 and fix:
-        run_cmd(["uvx", BLACK_VERSION, *file_args], config.root)
+        run_cmd(["uvx", f"black@{config.black_version}", *file_args], config.root)
 
     return _record("Black formatter", result.returncode, output)
 

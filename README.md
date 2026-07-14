@@ -67,6 +67,8 @@ repo's root `pyproject.toml`:
 | `exclude` | list of globs | — | extra excludes appended to the built-in defaults |
 | `license_header` | path | — | repo-relative path to a header text file (required when `license-header` is enabled) |
 | `main_branch` | str | `"main"` | branch used for changed-file discovery via merge-base |
+| `ruff_version` | str | `"0.14.3"` | ruff version to invoke — align with the repo's own ruff pin to avoid format skew |
+| `black_version` | str | `"25.9.0"` | black version to invoke |
 
 Tools are invoked as pinned `uvx` versions (ruff, black) and `pyrefly` (which
 reads the consumer's own pyproject config).
