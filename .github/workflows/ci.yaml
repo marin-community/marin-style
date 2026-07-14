@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  precommit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Self-lint with the packaged gate
+        run: uv run marin-precommit --all-files
+      - name: Vendor round-trip
+        run: |
+          tmp=$(mktemp -d)
+          git -C "$tmp" init -q
+          uv run marin-style sync --repo-root "$tmp"
+          uv run marin-style sync --repo-root "$tmp" --check
