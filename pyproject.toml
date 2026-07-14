@@ -1,0 +1,29 @@
+[project]
+name = "marin-style"
+version = "0.1.0"
+description = "Marin coding standards as an installable kit: pre-commit linter, lint-review catalog, agent guidelines, and portable skills"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "click>=8.1",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+marin-precommit = "marin_style.precommit:main"
+marin-style = "marin_style.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.marin-style]
+checks = ["ruff-check", "ruff-format", "typecheck"]
+
+[tool.ruff]
+line-length = 121
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]

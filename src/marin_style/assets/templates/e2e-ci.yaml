@@ -1,0 +1,140 @@
+# ---------------------------------------------------------------------------
+# REFERENCE TEMPLATE — copied verbatim from marin-community/evalchemy.
+# This is a starting point to ADAPT per consumer repo, not a drop-in file.
+# Adjust job names, paths, cluster/region, and the eval specs for your repo.
+# ---------------------------------------------------------------------------
+name: E2E CI
+
+# Per-push / per-PR checks for the serve-and-eval runner (eval/serve_eval/) and the
+# regression gate (eval/regression/).
+#
+#   harness       -- always. Runs tests/e2e (test_serve_eval + test_gate) against
+#                    both packages -- the run config / results reader, the eval-arg
+#                    builder, the providers' URL handling + PTY capability-URL parse,
+#                    and the gate's pass/fail decisions -- using a stdlib HTTP stub
+#                    and a PTY. No model, no cluster.
+#   endpoint-eval -- only when the repo variable E2E_BASE_URL is set. An OPTIONAL
+#                    smoke of the runner against a real OpenAI-compatible endpoint
+#                    (serve-attach -> eval -> results). It does NOT gate scores, so
+#                    it is not a required PR check.
+#   cluster-preflight -- on demand only (add the 'e2e-preflight' label to a PR, or
+#                    "Run workflow"). Exercises the nightly's keyless GCP auth (WIF ->
+#                    github-iris) and Iris controller reachability WITHOUT provisioning
+#                    a TPU -- the cheap way to confirm the federation and IAP access
+#                    work before the real nightly run.
+#
+# The nightly cluster run (provision a TPU via marin-serve, eval, then gate against
+# the checked-in spec) lives in e2e-nightly.yaml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run e2e harness tests
+        # The harness core imports only stdlib + pyyaml/pydantic/pydantic-settings/
+        # click, so the tests run in an ephemeral env (--no-project) without
+        # installing evalchemy.
+        run: >-
+          uv run --no-project --python 3.11
+          --with pytest --with pyyaml --with pydantic --with pydantic-settings --with click
+          python -m pytest tests/e2e/ -q
+
+  endpoint-eval:
+    if: ${{ vars.E2E_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      E2E_API_KEY: ${{ secrets.E2E_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Sync evalchemy + the serve-eval runner (vLLM-free)
+        run: uv sync --no-dev --python 3.11 --extra serve-eval
+      - name: Run evalchemy against the endpoint
+        run: >-
+          uv run python -m eval.serve_eval.run --provider endpoint
+          --base-url "$E2E_BASE_URL"
+          --model "${{ vars.E2E_MODEL || 'Qwen/Qwen3-0.6B' }}"
+          --tasks gsm8k --limit 20 --output-dir e2e-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-endpoint-results
+          path: e2e-out/**
+          if-no-files-found: ignore
+
+  cluster-preflight:
+    # Confirm the nightly's GCP credentials and Iris controller reachability without
+    # provisioning a TPU. Add the 'e2e-preflight' label to a PR to run it, or dispatch
+    # this workflow once it is on the default branch. Same-repo branches only -- fork
+    # PRs cannot read the secrets.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e-preflight')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write   # mint the GitHub OIDC token that WIF exchanges for github-iris
+    steps:
+      - name: Check out evalchemy
+        uses: actions/checkout@v4
+
+      - name: Check out marin (for the iris cluster config)
+        uses: actions/checkout@v4
+        with:
+          repository: marin-community/marin
+          path: marin-src
+          fetch-depth: 1
+
+      - name: Materialize a clean marin workspace (tracked tree, no .git)
+        run: |
+          mkdir -p marin
+          git -C marin-src archive HEAD | tar -x -C marin
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Authenticate to Google Cloud
+        # Fails here if the WIF binding is missing -- the core federation check.
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: hai-gcp-models
+          workload_identity_provider: projects/748532799086/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
+          service_account: github-iris@hai-gcp-models.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: hai-gcp-models
+
+      - name: Verify the federated identity resolves the project
+        run: |
+          gcloud auth list   # should show github-iris@hai-gcp-models
+          gcloud projects describe hai-gcp-models --format='value(projectId)'
+
+      - name: Install marin-serve / iris and expose iris on PATH
+        # Floor = first nightly carrying the WIF IAP-auth fix (marin#7144); `>=` floats forward.
+        run: |
+          uv tool install --prerelease allow "marin-core>=0.2.46.dev202607131620"
+          echo "$(uv tool dir)/marin-core/bin" >> "$GITHUB_PATH"
+
+      - name: Probe the marin Iris controller (authenticated read-only RPC)
+        # The end-to-end check: the SA authenticated through IAP and reached the
+        # controller the nightly submits jobs to. --state bounds the query; an
+        # unfiltered `job list` pages the whole cluster and trips MAX_LIST_JOBS_OFFSET.
+        run: iris --config marin/lib/iris/config/marin.yaml job list --state running

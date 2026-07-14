@@ -1,0 +1,137 @@
+# ---------------------------------------------------------------------------
+# REFERENCE TEMPLATE — copied verbatim from marin-community/evalchemy.
+# This is a starting point to ADAPT per consumer repo, not a drop-in file.
+# Adjust job names, paths, cluster/region, and the eval specs for your repo.
+# ---------------------------------------------------------------------------
+name: E2E Nightly
+
+# Nightly end-to-end run: provision a TPU on the Marin/Iris "marin" cluster via
+# marin-serve (the eval/serve_eval runner), evaluate the served model with evalchemy,
+# and gate the scores against eval/regression/specs/qwen3-0.6b.json (the eval/regression
+# gate). This is the real e2e test. Scheduled + manual dispatch only.
+#
+# Runs on a hosted runner and reaches the cluster over GCP. Auth is keyless via
+# Workload Identity Federation: the job's GitHub OIDC token (permissions.id-token:
+# write) is exchanged to impersonate github-iris@hai-gcp-models -- no stored SA key.
+# Provision the pool/provider/binding with scripts/ci/setup-github-wif.sh; github-iris
+# also needs the controller's IAP access (roles/iap.httpsResourceAccessor + submit ACL).
+# Qwen3-0.6B is a public model, so no HF token is required; add HF_TOKEN and forward
+# it to marin-serve if you switch to a gated model.
+#
+# marin-serve resolves `--cluster marin` from lib/iris/config/marin.yaml in a marin
+# checkout and bundles its working directory as the Iris job workspace, so the marin
+# repo is checked out and reduced to its tracked tree (git archive) to keep the
+# bundle under the size limit (see marin-community/marin#7106).
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "HF model id to serve/evaluate"
+        default: Qwen/Qwen3-0.6B
+      tpu:
+        description: "TPU slice type"
+        default: v5litepod-8
+      region:
+        description: "Region(s) to pin the slice to"
+        default: europe-west4
+      tasks:
+        description: "Comma-separated tasks"
+        default: gsm8k
+      limit:
+        description: "Per-task sample cap (must match the spec's expected_samples to gate; re-record for other values)"
+        default: "100"
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: false   # never interrupt a run that has a TPU provisioned
+
+jobs:
+  marin-serve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write   # mint the GitHub OIDC token that WIF exchanges for github-iris
+    steps:
+      - name: Check out evalchemy
+        uses: actions/checkout@v4
+
+      - name: Check out marin
+        uses: actions/checkout@v4
+        with:
+          repository: marin-community/marin
+          path: marin-src
+          fetch-depth: 1
+
+      - name: Materialize a clean marin workspace (own git repo for correct bundling)
+        # marin-serve bundles this dir as the Iris job workspace, and iris's bundler
+        # enumerates files with `git ls-files --exclude-standard`. Nested under the
+        # evalchemy checkout with no .git of its own, git resolves to the EVALCHEMY
+        # repo and applies its stock `lib/` ignore rule -- which strips marin's lib/**
+        # packages (lib/marin, lib/iris, ...) from the bundle. The job then can't
+        # `uv sync` the lib/marin workspace member and dies at container build
+        # ("Distribution not found at: file:///app/lib/marin"). Give the extracted
+        # tree its own .git so the bundler resolves HERE and honors marin's ignore
+        # rules (which keep lib/). The bundler excludes .git, so it isn't shipped;
+        # the full tracked tree zips to ~20MB, under the 25MB bundle cap.
+        run: |
+          mkdir -p marin
+          git -C marin-src archive HEAD | tar -x -C marin
+          git -C marin init -q
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: hai-gcp-models
+          workload_identity_provider: projects/748532799086/locations/global/workloadIdentityPools/github-pool/providers/github-oidc
+          service_account: github-iris@hai-gcp-models.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: hai-gcp-models
+
+      - name: Install marin-serve / iris (isolated tool env)
+        # marin-core can't co-resolve with evalchemy's deps, so it lives in its own
+        # uv tool env. uv symlinks marin-serve but NOT iris, so put the tool's bin
+        # dir on PATH -- teardown (the provider's finally + the cleanup step below)
+        # shells out to `iris job stop`, which otherwise wouldn't resolve.
+        # Floor = first nightly carrying the WIF IAP-auth fix (marin#7144); `>=`
+        # still floats to newer nightlies, it just won't resolve a pre-fix build.
+        run: |
+          uv tool install --prerelease allow "marin-core>=0.2.46.dev202607131620"
+          echo "$(uv tool dir)/marin-core/bin" >> "$GITHUB_PATH"
+
+      - name: Sync evalchemy + the serve-eval runner (vLLM-free)
+        run: uv sync --no-dev --python 3.11 --extra serve-eval
+
+      - name: Serve, evaluate, and gate
+        run: |
+          uv run python -m eval.serve_eval.run --provider marin-serve --access link \
+            --model "${{ github.event.inputs.model || 'Qwen/Qwen3-0.6B' }}" \
+            --tpu "${{ github.event.inputs.tpu || 'v5litepod-8' }}" \
+            --region "${{ github.event.inputs.region || 'europe-west4' }}" \
+            --marin-workspace "$GITHUB_WORKSPACE/marin" \
+            --tasks "${{ github.event.inputs.tasks || 'gsm8k' }}" \
+            --limit "${{ github.event.inputs.limit || '100' }}" \
+            --output-dir e2e-out
+          uv run python -m eval.regression.validate check --results e2e-out \
+            --spec eval/regression/specs/qwen3-0.6b.json
+
+      - name: Stop any Iris job the run left behind
+        if: always()
+        # The provider stops its own job in a finally and marin-serve self-stops after
+        # --timeout-hours; this covers a hard-killed step. --cluster is a top-level flag.
+        run: iris --cluster marin job stop "evalchemy-e2e-qwen3-0-6b" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-nightly-results
+          path: e2e-out/**
+          if-no-files-found: ignore
