@@ -1,0 +1,160 @@
+name: Report scheduled-run failure
+description: >
+  File or update a per-lane tracking issue for a failed scheduled run, ask weaverbot
+  (the loom GitHub trigger) to triage it, and post to Slack. The weaverbot ask and the
+  Slack post each skip with a workflow notice when their token/webhook input is empty,
+  so consumers can wire this action before the org secrets are provisioned.
+
+inputs:
+  lane:
+    description: >
+      Unique lane identifier (e.g. vllm-nightly). Flows into the default issue title
+      prefix, the weaverbot ask, and the Slack message.
+    required: true
+  issue-title-prefix:
+    description: >
+      Title prefix used to find the lane's open tracking issue and to create it. The
+      default is "[nightly-<lane>]". Point this at another convention (e.g. marin's
+      "[canary-<lane>]") to comment on issues filed by a different triage flow.
+    required: false
+    default: ''
+  issue-labels:
+    description: Comma-separated labels applied when the tracking issue is created.
+    required: false
+    default: agent-generated,nightly-failure
+  repo-token:
+    description: Token used to read run logs and create/search issues.
+    required: false
+    default: ${{ github.token }}
+  trigger-token:
+    description: >
+      PAT used to address the triage ask TO @weaverbot (the loom trigger). Its owner
+      must be a loom-approved user — use a dedicated CI machine account, never
+      weaverbot itself: loom ignores the bot's own comments when its self-trigger
+      guard (github.bot_login) is set. When this token is set, the failure comment is
+      posted with it and opens with the @weaverbot ask, which launches a weaver
+      session on the repo (or nudges the session already working the issue). When
+      empty, the comment is posted with repo-token and carries no trigger mention.
+    required: false
+    default: ''
+  slack-webhook-url:
+    description: Slack incoming-webhook URL. Empty skips the Slack post.
+    required: false
+    default: ''
+  triage-notes:
+    description: Extra repo-specific instructions appended to the weaverbot ask.
+    required: false
+    default: ''
+
+outputs:
+  issue-url:
+    description: URL of the lane's tracking issue.
+    value: ${{ steps.issue.outputs.issue-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: File or update the tracking issue
+      id: issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.repo-token }}
+        TRIGGER_TOKEN: ${{ inputs.trigger-token }}
+        LANE: ${{ inputs.lane }}
+        TITLE_PREFIX: ${{ inputs.issue-title-prefix }}
+        ISSUE_LABELS: ${{ inputs.issue-labels }}
+        TRIAGE_NOTES: ${{ inputs.triage-notes }}
+      run: |
+        set -euo pipefail
+        prefix="${TITLE_PREFIX:-[nightly-${LANE}]}"
+        run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        workdir=$(mktemp -d)
+
+        # Excerpt of the failed jobs' logs. `gh run view --log-failed` refuses while
+        # the run is still in progress (this reporting job is part of it), so pull
+        # the per-job logs of the jobs that have already failed. Requires the
+        # calling job to grant `actions: read`.
+        for job_id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | select(.conclusion == "failure") | .id' 2>/dev/null); do
+          gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job_id/logs" 2>/dev/null \
+            | sed -E 's/^[0-9TZ:.-]{20,}[[:space:]]//' | tail -n 60 | cut -c -400
+        done > "$workdir/excerpt.txt" || true
+        if [ ! -s "$workdir/excerpt.txt" ]; then
+          echo "(no failed-job logs were available when this was captured)" > "$workdir/excerpt.txt"
+        fi
+
+        issue_number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+          --limit 100 --json number,title \
+          | jq -r --arg p "$prefix" '[.[] | select(.title | startswith($p))][0].number // empty')
+
+        if [ -z "$issue_number" ]; then
+          for label in ${ISSUE_LABELS//,/ }; do
+            gh label create "$label" --repo "$GITHUB_REPOSITORY" --force \
+              --color D93F0B --description "Automated failure tracking" 2>/dev/null || true
+          done
+          cat > "$workdir/issue_body.md" <<EOF
+        Automated tracking issue for failures of the \`$LANE\` scheduled run.
+
+        Each failure adds a comment below with the run link and a log excerpt, and asks
+        a weaver session to triage. Close this issue once the lane is green again; the
+        next failure opens a fresh one.
+        EOF
+          issue_url=$(gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "$prefix scheduled run failing" \
+            --label "$ISSUE_LABELS" \
+            --body-file "$workdir/issue_body.md")
+          issue_number="${issue_url##*/}"
+        else
+          issue_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/issues/${issue_number}"
+        fi
+        echo "issue-url=$issue_url" >> "$GITHUB_OUTPUT"
+
+        if [ -n "$TRIGGER_TOKEN" ]; then
+          cat > "$workdir/comment.md" <<EOF
+        @weaverbot The scheduled \`$LANE\` run failed — triage it.
+
+        - Failing run: $run_url (\`gh run view $GITHUB_RUN_ID --log-failed -R $GITHUB_REPOSITORY\`)
+        - Diagnose the root cause and post your findings as a comment on this issue.
+        - If the fix belongs in this repo, open a PR. If the cause is Marin/Iris
+          infrastructure, file or link an issue in marin-community/marin instead and
+          note it here.
+        EOF
+          if [ -n "$TRIAGE_NOTES" ]; then
+            printf '\n%s\n' "$TRIAGE_NOTES" >> "$workdir/comment.md"
+          fi
+        else
+          echo "::notice::trigger-token is empty — recording the failure without a weaverbot triage ask."
+          cat > "$workdir/comment.md" <<EOF
+        The scheduled \`$LANE\` run failed: $run_url
+
+        (No loom trigger token was configured, so no triage session was requested.)
+        EOF
+        fi
+
+        {
+          printf '\n<details><summary>Failed-step log excerpt</summary>\n\n```\n'
+          cat "$workdir/excerpt.txt"
+          printf '```\n\n</details>\n'
+        } >> "$workdir/comment.md"
+
+        GH_TOKEN="${TRIGGER_TOKEN:-$GH_TOKEN}" gh issue comment "$issue_number" \
+          --repo "$GITHUB_REPOSITORY" --body-file "$workdir/comment.md"
+
+    - name: Notify Slack
+      shell: bash
+      env:
+        SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
+        LANE: ${{ inputs.lane }}
+        ISSUE_URL: ${{ steps.issue.outputs.issue-url }}
+      run: |
+        set -euo pipefail
+        if [ -z "$SLACK_WEBHOOK_URL" ]; then
+          echo "::notice::slack-webhook-url is empty — skipping the Slack post."
+          exit 0
+        fi
+        run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        text=":red_circle: *${GITHUB_REPOSITORY#*/}: ${LANE} failed*
+        Run: ${run_url}
+        Issue: ${ISSUE_URL}"
+        payload=$(python3 -c "import sys, json; print(json.dumps({'text': sys.stdin.read()}))" <<< "$text")
+        curl -sf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL"
