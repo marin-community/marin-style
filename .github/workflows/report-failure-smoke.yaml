@@ -1,0 +1,38 @@
+name: Report-failure smoke
+
+# Manual end-to-end exercise of actions/report-failure against this repo: a job
+# fails on purpose, the reporting job files/updates the [nightly-smoke] issue,
+# posts the weaverbot ask (when WEAVERBOT_GH_TOKEN is available), and pings Slack
+# (when SLACK_WEBHOOK_URL is available). Close the smoke issue after inspecting.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fail-on-purpose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail
+        run: |
+          echo "synthetic failure for the report-failure smoke"
+          exit 1
+
+  report-failure:
+    needs: [fail-on-purpose]
+    if: always() && needs.fail-on-purpose.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./actions/report-failure
+        with:
+          lane: smoke
+          trigger-token: ${{ secrets.WEAVERBOT_GH_TOKEN }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          triage-notes: >-
+            This is the report-failure smoke lane — the failure is synthetic
+            (`exit 1`). Confirm the reporting pipeline worked, comment briefly,
+            and close the issue; no code fix is expected.
