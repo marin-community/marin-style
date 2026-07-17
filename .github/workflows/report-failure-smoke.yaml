@@ -2,7 +2,7 @@ name: Report-failure smoke
 
 # Manual end-to-end exercise of actions/report-failure against this repo: a job
 # fails on purpose, the reporting job files/updates the [nightly-smoke] issue,
-# posts the weaverbot ask (when WEAVERBOT_GH_TOKEN is available), and pings Slack
+# posts the weaverbot ask (when LOOM_TRIGGER_GH_TOKEN is available), and pings Slack
 # (when SLACK_WEBHOOK_URL is available). Close the smoke issue after inspecting.
 
 on:
@@ -30,7 +30,7 @@ jobs:
       - uses: ./actions/report-failure
         with:
           lane: smoke
-          trigger-token: ${{ secrets.WEAVERBOT_GH_TOKEN }}
+          trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           triage-notes: >-
             This is the report-failure smoke lane — the failure is synthetic

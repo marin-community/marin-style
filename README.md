@@ -129,7 +129,7 @@ action, consumed cross-repo:
       - uses: marin-community/marin-style/actions/report-failure@<REV>
         with:
           lane: <repo>-nightly
-          trigger-token: ${{ secrets.WEAVERBOT_GH_TOKEN }}
+          trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
@@ -140,12 +140,14 @@ The action does three things, in order:
    convention, e.g. marin's `[canary-<lane>]` issues filed by its inline Claude
    triage) and creates it if absent. Every failure appends one comment with the
    run URL and a failed-job log excerpt, so a flaky week is one issue, not seven.
-2. **Weaver auto-triage.** The failure comment opens with an `@weaverbot` triage
-   ask, posted with `trigger-token`. The loom deployment launches a weaver session
-   against the repo — or forwards the comment to the session already working the
-   issue. The token must belong to a GitHub user approved in loom (weaverbot);
-   comments from `github-actions[bot]` can never trigger. When the token is empty
-   the failure is still recorded, with a workflow notice and no mention.
+2. **Weaver auto-triage.** The failure comment is addressed *to* `@weaverbot`
+   (the loom trigger phrase) and posted with `trigger-token`. The loom deployment
+   launches a weaver session against the repo — or forwards the comment to the
+   session already working the issue. The token's owner must be a loom-approved
+   user: use a dedicated CI machine account, never weaverbot itself (loom's
+   self-trigger guard ignores the bot's own comments), and note that
+   `github-actions[bot]` can never trigger. When the token is empty the failure
+   is still recorded, with a workflow notice and no mention.
 3. **Slack.** Posts lane, run URL, and issue URL to `slack-webhook-url`; skips
    with a notice when empty.
 

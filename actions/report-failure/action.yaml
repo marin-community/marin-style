@@ -28,10 +28,13 @@ inputs:
     default: ${{ github.token }}
   trigger-token:
     description: >
-      PAT of a loom-approved GitHub user (weaverbot). When set, the failure comment is
-      posted with this token and opens with an @weaverbot triage ask, which launches a
-      weaver session on the repo (or nudges the session already working the issue).
-      When empty, the comment is posted with repo-token and carries no trigger mention.
+      PAT used to address the triage ask TO @weaverbot (the loom trigger). Its owner
+      must be a loom-approved user — use a dedicated CI machine account, never
+      weaverbot itself: loom ignores the bot's own comments when its self-trigger
+      guard (github.bot_login) is set. When this token is set, the failure comment is
+      posted with it and opens with the @weaverbot ask, which launches a weaver
+      session on the repo (or nudges the session already working the issue). When
+      empty, the comment is posted with repo-token and carries no trigger mention.
     required: false
     default: ''
   slack-webhook-url:
@@ -124,7 +127,7 @@ runs:
           cat > "$workdir/comment.md" <<EOF
         The scheduled \`$LANE\` run failed: $run_url
 
-        (No weaverbot trigger token was configured, so no triage session was requested.)
+        (No loom trigger token was configured, so no triage session was requested.)
         EOF
         fi
 
