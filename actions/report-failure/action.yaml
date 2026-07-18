@@ -77,7 +77,7 @@ runs:
         for job_id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
             --jq '.jobs[] | select(.conclusion == "failure") | .id' 2>/dev/null); do
           gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job_id/logs" 2>/dev/null \
-            | sed -E 's/^[0-9TZ:.-]{20,}[[:space:]]//' | tail -n 60 | cut -c -400
+            | sed -E 's/^\xef\xbb\xbf//; s/^[0-9TZ:.-]{20,}[[:space:]]//' | tail -n 60 | cut -c -400
         done > "$workdir/excerpt.txt" || true
         if [ ! -s "$workdir/excerpt.txt" ]; then
           echo "(no failed-job logs were available when this was captured)" > "$workdir/excerpt.txt"
@@ -118,6 +118,13 @@ runs:
         - If the fix belongs in this repo, open a PR. If the cause is Marin/Iris
           infrastructure, file or link an issue in marin-community/marin instead and
           note it here.
+        - When you are completely done (findings posted, any PR opened), clean up
+          after yourself: post your wrap-up comment, then as your literal final
+          action run \`loom session archive \$(git branch --show-current)\` to tear
+          down your own session (branch and history survive; recoverable with
+          \`loom session recover\`). Skip the archive if you opened a PR — the
+          session auto-archives when the PR merges, and staying live lets you
+          respond to review feedback.
         EOF
           if [ -n "$TRIAGE_NOTES" ]; then
             printf '\n%s\n' "$TRIAGE_NOTES" >> "$workdir/comment.md"
