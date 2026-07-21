@@ -1,0 +1,27 @@
+name: Ops - Agent Prose Cleanup
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled]
+  pull_request_target:
+    types: [opened, edited, reopened, labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  request-cleanup:
+    # This avoids runner use for unrelated items. The action repeats the guard
+    # because it can also be called from workflows that omit this filter.
+    if: contains(github.event.issue.labels.*.name || github.event.pull_request.labels.*.name, 'agent-generated')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      # Pin to an exact marin-style release commit. The action reads event data
+      # and comments only; it never checks out or executes pull request code.
+      - uses: marin-community/marin-style/actions/prose-cleanup@<REV>
+        with:
+          trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}

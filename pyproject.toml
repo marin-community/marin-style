@@ -1,6 +1,6 @@
 [project]
 name = "marin-style"
-version = "0.1.0"
+version = "0.3.0"
 description = "Marin coding standards as an installable kit: pre-commit linter, lint-review catalog, agent guidelines, and portable skills"
 readme = "README.md"
 requires-python = ">=3.12"
