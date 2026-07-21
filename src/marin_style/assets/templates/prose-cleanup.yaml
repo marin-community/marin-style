@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   request-cleanup:
-    if: >-
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'agent-generated')) ||
-      (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'agent-generated'))
+    # This avoids runner use for unrelated items. The action repeats the guard
+    # because it can also be called from workflows that omit this filter.
+    if: contains(github.event.issue.labels.*.name || github.event.pull_request.labels.*.name, 'agent-generated')
     runs-on: ubuntu-latest
     permissions:
       issues: write
