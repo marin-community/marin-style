@@ -41,6 +41,8 @@ runs:
       run: |
         set -euo pipefail
 
+        cleanup_footer_marker="<!-- marin-prose-cleanup -->"
+
         finish() {
           printf 'requested=%s\nreason=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
           exit 0
@@ -67,8 +69,8 @@ runs:
           finish false missing-label
         fi
 
-        if jq -e "(${selector}.body // \"\") | contains(\"<!-- marin-prose-cleanup -->\")" \
-            "$GITHUB_EVENT_PATH" >/dev/null; then
+        if jq --arg marker "$cleanup_footer_marker" \
+            -e "(${selector}.body // \"\") | contains(\$marker)" "$GITHUB_EVENT_PATH" >/dev/null; then
           echo "::notice::The $item_kind description already carries the cleanup footer."
           finish false already-cleaned
         fi
@@ -112,7 +114,7 @@ runs:
         If it needs cleanup:
         1. Archive the exact prior description in one comment beginning with \`🤖 Archived the description before automated prose cleanup.\` and containing \`$archive_marker\`.
         2. Re-fetch the description and repeat the stale-body hash check.
-        3. Edit only the description body. End it with \`[Original description](ARCHIVE_COMMENT_URL) <!-- marin-prose-cleanup -->\`, using the archive comment's real URL. Stay within GitHub's body limit.
+        3. Edit only the description body. End it with \`[Original description](ARCHIVE_COMMENT_URL) $cleanup_footer_marker\`, using the archive comment's real URL. Stay within GitHub's body limit.
 
         Do not post any other comments. When the GitHub edit is complete, run \`loom session archive \$(git branch --show-current)\` as your literal final action so this one-shot cleanup session tears itself down.
         $request_marker
