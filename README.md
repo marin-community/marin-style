@@ -159,6 +159,57 @@ experiments don't page anyone. The `report-failure-smoke` workflow in this repo
 
 Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
 
+## Agent prose cleanup (`actions/prose-cleanup`)
+
+Agent-generated issue and pull request descriptions can be cleaned through Loom
+without giving a model action direct write credentials. Copy
+`templates/prose-cleanup.yaml` into the consumer's `.github/workflows/` directory
+and replace `<REV>` with the exact marin-style release commit:
+
+```yaml
+name: Ops - Agent Prose Cleanup
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled]
+  pull_request_target:
+    types: [opened, edited, reopened, labeled]
+
+jobs:
+  request-cleanup:
+    if: >-
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'agent-generated')) ||
+      (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'agent-generated'))
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: marin-community/marin-style/actions/prose-cleanup@<REV>
+        with:
+          trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}
+```
+
+The action accepts only `issues` and `pull_request_target` events. It checks for
+the `agent-generated` label, skips descriptions that already carry the cleanup
+footer, and deduplicates requests by SHA-256 of the current body. A request
+comment asks `@weaverbot` to launch a one-shot Loom session that reads the
+vendored writing guides from the default branch, treats all GitHub content as
+untrusted data, archives the exact original description, repeats a stale-body
+check, and edits only the body. The archive URL and
+`<!-- marin-prose-cleanup -->` footer make the edit reversible and stop the
+workflow from requesting itself again.
+
+`pull_request_target` is used so the workflow can receive the organization
+secret for pull requests from forks. The workflow never checks out or executes
+the pull request head. Pin the action to an exact release commit and keep the
+job limited to the permissions above.
+
+`LOOM_TRIGGER_GH_TOKEN` must belong to a loom-approved CI account other than
+weaverbot; loom ignores weaverbot's own comments through its self-trigger guard.
+When the secret is absent, the action emits a workflow notice and does not post
+a request.
+
 ## Adding a repo
 
 1. Add the pinned `marin-style` git dev-dependency.
@@ -169,8 +220,9 @@ Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
 4. Run `marin-style sync`, then add `@.agents/marin-style/AGENTS-core.md` to the
    repo's `AGENTS.md` (the sync command prints this reminder).
 5. Wire CI: run `infra/pre-commit.py --all-files` and `marin-style sync --check`
-   on pull requests. For end-to-end model/eval gating, adapt the reference
-   workflows under `templates/` (`e2e-ci.yaml`, `e2e-nightly.yaml`,
-   `setup-github-wif.sh`) — they are copied verbatim from evalchemy and need
-   per-repo edits before use.
+   on pull requests. Copy `templates/prose-cleanup.yaml` to enable the
+   `agent-generated` description cleanup. For end-to-end model/eval gating,
+   adapt the other reference workflows under `templates/` (`e2e-ci.yaml`,
+   `e2e-nightly.yaml`, `setup-github-wif.sh`) — they are copied verbatim from
+   evalchemy and need per-repo edits before use.
 6. Commit the vendored `.agents/` tree and the shim.
