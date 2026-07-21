@@ -163,32 +163,10 @@ Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
 
 Agent-generated issue and pull request descriptions can be cleaned through Loom
 without giving a model action direct write credentials. Copy
-`templates/prose-cleanup.yaml` into the consumer's `.github/workflows/` directory
-and replace `<REV>` with the exact marin-style release commit:
-
-```yaml
-name: Ops - Agent Prose Cleanup
-
-on:
-  issues:
-    types: [opened, edited, reopened, labeled]
-  pull_request_target:
-    types: [opened, edited, reopened, labeled]
-
-jobs:
-  request-cleanup:
-    if: >-
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'agent-generated')) ||
-      (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'agent-generated'))
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: marin-community/marin-style/actions/prose-cleanup@<REV>
-        with:
-          trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}
-```
+`src/marin_style/assets/templates/prose-cleanup.yaml` into the consumer's
+`.github/workflows/` directory and replace `<REV>` with the exact marin-style
+release commit. Keep the template's event filters, concurrency guard, and
+permissions together.
 
 The action accepts only `issues` and `pull_request_target` events. It checks for
 the `agent-generated` label, skips descriptions that already carry the cleanup
@@ -220,9 +198,9 @@ a request.
 4. Run `marin-style sync`, then add `@.agents/marin-style/AGENTS-core.md` to the
    repo's `AGENTS.md` (the sync command prints this reminder).
 5. Wire CI: run `infra/pre-commit.py --all-files` and `marin-style sync --check`
-   on pull requests. Copy `templates/prose-cleanup.yaml` to enable the
-   `agent-generated` description cleanup. For end-to-end model/eval gating,
-   adapt the other reference workflows under `templates/` (`e2e-ci.yaml`,
-   `e2e-nightly.yaml`, `setup-github-wif.sh`) — they are copied verbatim from
-   evalchemy and need per-repo edits before use.
+   on pull requests. Copy `src/marin_style/assets/templates/prose-cleanup.yaml`
+   to enable the `agent-generated` description cleanup. For end-to-end
+   model/eval gating, adapt the other reference workflows under `templates/`
+   (`e2e-ci.yaml`, `e2e-nightly.yaml`, `setup-github-wif.sh`) — they are copied
+   verbatim from evalchemy and need per-repo edits before use.
 6. Commit the vendored `.agents/` tree and the shim.
