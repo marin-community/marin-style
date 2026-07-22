@@ -171,8 +171,9 @@ needs no write permissions or Loom token while disabled.
 
 Consumer workflows track these trusted actions on `main`:
 
-- `actions/classify-claude` converts Claude Code HTTP 429 failures into a
-  `rate_limited=true` output and preserves other failures.
+- `actions/consult-agent` runs the pinned Claude Code action, converts quota
+  exhaustion into a successful `rate_limited=true` result, preserves other
+  failures, and forwards Claude's outputs.
 - `actions/notify-slack` posts a fallback message or the contents of a workflow
   artifact named `slack_message.md` to an incoming webhook.
 

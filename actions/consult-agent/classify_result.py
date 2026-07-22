@@ -25,7 +25,7 @@ def _result_messages(value: object) -> list[dict[str, object]]:
 
 
 def classify_claude_result(value: object) -> ClaudeRunStatus:
-    """Classify a CLI envelope or claude-code-action execution trace."""
+    """Classify a claude-code-action execution trace."""
     messages = _result_messages(value)
     if any(
         message.get("is_error") is True
@@ -36,10 +36,6 @@ def classify_claude_result(value: object) -> ClaudeRunStatus:
     if any(message.get("is_error") is True for message in messages):
         return ClaudeRunStatus.FAILED
     return ClaudeRunStatus.SUCCESS
-
-
-def report_rate_limit() -> None:
-    print("::warning title=Claude rate limited::Skipping Claude agent because the account returned HTTP 429.")
 
 
 def _write_github_output(output_path: Path, rate_limited: bool) -> None:
@@ -60,7 +56,7 @@ def classify_action(outcome: str, execution_file: Path | None, github_output: Pa
         raise RuntimeError("Claude action failed for a reason other than rate limiting")
 
     _write_github_output(github_output, rate_limited=True)
-    report_rate_limit()
+    print("::warning title=Claude rate limited::Skipping Claude consultation because its quota is exhausted.")
 
 
 def main() -> None:
