@@ -17,8 +17,7 @@ jobs:
     if: contains(github.event.issue.labels.*.name || github.event.pull_request.labels.*.name, 'agent-generated')
     runs-on: ubuntu-latest
     steps:
-      # Pin to an exact marin-style release commit. This action is currently a
-      # no-op while automated prose cleanup is disabled.
-      - uses: marin-community/marin-style/actions/prose-cleanup@<REV>
+      # Track marin-style main so trusted shared-action changes apply here.
+      - uses: marin-community/marin-style/actions/prose-cleanup@main
         with:
           trigger-token: ${{ secrets.LOOM_TRIGGER_GH_TOKEN }}

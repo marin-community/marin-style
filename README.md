@@ -162,10 +162,10 @@ Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
 ## Agent prose cleanup (`actions/prose-cleanup`)
 
 Automated cleanup of agent-generated issue and pull request descriptions is
-temporarily disabled. Existing consumer workflows can remain in place after
-pinning to this release: `actions/prose-cleanup` exits successfully without
-posting comments or changing descriptions. It needs no write permissions or
-Loom token while disabled.
+temporarily disabled. Consumer workflows track `actions/prose-cleanup@main`, so
+trusted changes in this repository apply without separate workflow updates. The
+action exits successfully without posting comments or changing descriptions. It
+needs no write permissions or Loom token while disabled.
 
 ## Adding a repo
 
