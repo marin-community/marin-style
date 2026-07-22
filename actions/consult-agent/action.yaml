@@ -1,0 +1,85 @@
+name: Consult agent
+description: Run Claude Code while treating quota exhaustion as a skipped consultation.
+
+inputs:
+  claude_code_oauth_token:
+    description: Claude Code OAuth token.
+    required: true
+  github_token:
+    description: GitHub token passed to claude-code-action.
+    required: false
+    default: ''
+  allowed_bots:
+    description: Comma-separated bot usernames accepted by claude-code-action.
+    required: false
+    default: ''
+  prompt:
+    description: Instructions for Claude.
+    required: false
+    default: ''
+  claude_args:
+    description: Arguments passed to the Claude CLI.
+    required: false
+    default: ''
+  settings:
+    description: Claude Code settings as JSON or a path.
+    required: false
+    default: ''
+  additional_permissions:
+    description: Additional GitHub permissions requested by claude-code-action.
+    required: false
+    default: ''
+  track_progress:
+    description: Whether claude-code-action should maintain a progress comment.
+    required: false
+    default: 'false'
+
+outputs:
+  rate_limited:
+    description: Whether Claude exhausted its API or weekly quota.
+    value: ${{ steps.classify.outputs.rate_limited }}
+  execution_file:
+    description: Path to the Claude Code execution trace.
+    value: ${{ steps.claude.outputs.execution_file }}
+  branch_name:
+    description: Branch created by Claude Code.
+    value: ${{ steps.claude.outputs.branch_name }}
+  github_token:
+    description: GitHub token used by claude-code-action.
+    value: ${{ steps.claude.outputs.github_token }}
+  structured_output:
+    description: JSON produced when claude_args includes a JSON schema.
+    value: ${{ steps.claude.outputs.structured_output }}
+  session_id:
+    description: Claude Code session identifier.
+    value: ${{ steps.claude.outputs.session_id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run Claude Code
+      id: claude
+      continue-on-error: true
+      uses: anthropics/claude-code-action@fbda2eb1bdc90d319b8d853f5deb53bca199a7c1  # v1.0.140
+      with:
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        github_token: ${{ inputs.github_token }}
+        allowed_bots: ${{ inputs.allowed_bots }}
+        prompt: ${{ inputs.prompt }}
+        claude_args: ${{ inputs.claude_args }}
+        settings: ${{ inputs.settings }}
+        additional_permissions: ${{ inputs.additional_permissions }}
+        track_progress: ${{ inputs.track_progress }}
+
+    - name: Classify Claude result
+      id: classify
+      if: always()
+      shell: bash
+      env:
+        CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+        CLAUDE_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        CLAUDE_EXECUTION_FILE_FALLBACK: ${{ runner.temp }}/claude-execution-output.json
+      run: >-
+        python "$GITHUB_ACTION_PATH/classify_result.py"
+        "$CLAUDE_OUTCOME" "${CLAUDE_EXECUTION_FILE:-$CLAUDE_EXECUTION_FILE_FALLBACK}"
+        --github-output "$GITHUB_OUTPUT"

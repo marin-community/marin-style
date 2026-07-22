@@ -167,6 +167,19 @@ trusted changes in this repository apply without separate workflow updates. The
 action exits successfully without posting comments or changing descriptions. It
 needs no write permissions or Loom token while disabled.
 
+## Shared workflow actions
+
+Consumer workflows track these trusted actions on `main`:
+
+- `actions/consult-agent` runs the pinned Claude Code action, converts quota
+  exhaustion into a successful `rate_limited=true` result, preserves other
+  failures, and forwards Claude's outputs.
+- `actions/notify-slack` posts a fallback message or the contents of a workflow
+  artifact named `slack_message.md` to an incoming webhook.
+
+Use `marin-community/marin-style/actions/<name>@main` so workflow behavior can
+be maintained in this repository.
+
 ## Adding a repo
 
 1. Add the pinned `marin-style` git dev-dependency.
