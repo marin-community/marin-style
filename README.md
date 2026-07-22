@@ -161,32 +161,11 @@ Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
 
 ## Agent prose cleanup (`actions/prose-cleanup`)
 
-Agent-generated issue and pull request descriptions can be cleaned through Loom
-without giving a model action direct write credentials. Copy
-`src/marin_style/assets/templates/prose-cleanup.yaml` into the consumer's
-`.github/workflows/` directory and replace `<REV>` with the exact marin-style
-release commit. Keep the template's event filters, concurrency guard, and
-permissions together.
-
-The action accepts only `issues` and `pull_request_target` events. It checks for
-the `agent-generated` label, skips descriptions that already carry the cleanup
-footer, and deduplicates requests by SHA-256 of the current body. A request
-comment asks `@weaverbot` to launch a one-shot Loom session that reads the
-vendored writing guides from the default branch, treats all GitHub content as
-untrusted data, archives the exact original description, repeats a stale-body
-check, and edits only the body. The archive URL and
-`<!-- marin-prose-cleanup -->` footer make the edit reversible and stop the
-workflow from requesting itself again.
-
-`pull_request_target` is used so the workflow can receive the organization
-secret for pull requests from forks. The workflow never checks out or executes
-the pull request head. Pin the action to an exact release commit and keep the
-job limited to the permissions above.
-
-`LOOM_TRIGGER_GH_TOKEN` must belong to a loom-approved CI account other than
-weaverbot; loom ignores weaverbot's own comments through its self-trigger guard.
-When the secret is absent, the action emits a workflow notice and does not post
-a request.
+Automated cleanup of agent-generated issue and pull request descriptions is
+temporarily disabled. Consumer workflows track `actions/prose-cleanup@main`, so
+trusted changes in this repository apply without separate workflow updates. The
+action exits successfully without posting comments or changing descriptions. It
+needs no write permissions or Loom token while disabled.
 
 ## Adding a repo
 
@@ -199,7 +178,8 @@ a request.
    repo's `AGENTS.md` (the sync command prints this reminder).
 5. Wire CI: run `infra/pre-commit.py --all-files` and `marin-style sync --check`
    on pull requests. Copy `src/marin_style/assets/templates/prose-cleanup.yaml`
-   to enable the `agent-generated` description cleanup. For end-to-end
+   to install the disabled `agent-generated` description-cleanup placeholder.
+   For end-to-end
    model/eval gating, adapt the other reference workflows under `templates/`
    (`e2e-ci.yaml`, `e2e-nightly.yaml`, `setup-github-wif.sh`) — they are copied
    verbatim from evalchemy and need per-repo edits before use.
