@@ -14,8 +14,10 @@ infra/pre-commit.py --all-files --fix
 - `infra/pre-commit.py` is the required lint entry point. It is a thin shim that
   runs the shared `marin-style` checks. Do not replace it with `uv run pre-commit`.
 - Type checking runs as part of the pre-commit pass; keep type hints passing.
-- Run the lint-review pass (`infra/pre-commit.py --review`) before opening a PR,
-  and fix or answer every finding it reports.
+- Run the lint-review pass (`infra/pre-commit.py --review`) once before opening a
+  PR, and fix or answer every finding it reports. Small, targeted follow-ups do
+  not need another review. Rerun it only when later changes materially alter the
+  branch's design, scope, or risk, or when the user asks for another pass.
 
 ## Communication & Commits
 
