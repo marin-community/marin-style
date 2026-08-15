@@ -6,7 +6,7 @@ description: Lint, run the pre-PR checks, commit, push, and author or update the
 # Skill: Commit & PR
 
 Get the branch clean, commit it, run the advisory lint review over the committed
-diff, then — when it is ready — open or update the pull request.
+diff once, then — when it is ready — open or update the pull request.
 
 Before authoring a commit or PR title or body, read:
 
@@ -25,14 +25,15 @@ commit. The review is read-only: it never edits, commits, or pushes for you.
 Work top to bottom. For a quick work-in-progress checkpoint, do **1, 2, 4, 5,
 7** (clean up, lint, stage, commit, push) and stop. The changed-test cleanup in
 step 1 is a PR-readiness gate, not required for disposable WIP checkpoints. Run
-the whole list before you open or update a PR.
+the whole list when making a branch PR-ready. Later small follow-ups do not
+restart the checklist; repeat only the relevant mechanical checks and tests.
 
 1. Clean up your own diff (self-review).
 2. Mechanical lint & format — `infra/pre-commit.py --changed-files --fix`.
 3. Tests & docs checks, when relevant.
 4. Stage the specific files for this work.
 5. Commit. ← natural checkpoint; the working tree is now clean.
-6. Lint-catalog review — `infra/pre-commit.py --review`; fix or answer every finding.
+6. Lint-catalog review — run `infra/pre-commit.py --review` once; fix or answer every finding.
 7. Push (maybe).
 8. Open or update the PR.
 
@@ -101,13 +102,13 @@ commit — never amend (unless the user asks) and never force-push.
 This is the checkpoint the rest of the flow builds on: the working tree is clean
 and the branch diff is settled before the review reads it.
 
-## 6. Lint-catalog review (before every PR)
+## 6. Lint-catalog review (one branch-level checkpoint)
 
 ```bash
 infra/pre-commit.py --review
 ```
 
-Run this **after** the commit and before opening a PR. It fans out read-only
+Run this **once after** the commit and before opening a PR. It fans out read-only
 agents over the **branch diff against the merge base with the default branch** —
 committed and uncommitted work alike — so the clean checkpoint from step 5 is
 exactly what gets reviewed.
@@ -117,6 +118,14 @@ not edit, stage, commit, or push anything. Then fix or answer every finding,
 reporting your actions to the user, and land any fixes as a **new** commit. Treat
 findings as guidelines — apply them when they make the code *better*; the goal is
 high-quality code, not blind adherence.
+
+The initial review is the branch-level checkpoint. Do not rerun it after small,
+targeted follow-ups, whether they address lint findings, reviewer
+comments, formatting, documentation wording, or narrow test fixes. Validate
+those edits with the relevant mechanical checks and tests, then continue the
+workflow. Rerun the advisory review only when later changes materially alter the
+branch's design, scope, or risk, or when the user asks for another pass. Updating
+an existing PR does not by itself trigger another review.
 
 ## 7. Push
 
@@ -195,7 +204,7 @@ Exit conditions: the PR is merged or closed, or the user tells you to stop.
 ## Rules
 
 - `infra/pre-commit.py` is the only pre-commit entry point.
-- Commit before you run `--review`; the review never commits, pushes, or edits.
+- Commit before the initial `--review`; do not rerun it for small follow-ups.
 - Never amend a commit unless the user explicitly asks.
 - If there are no changes to commit, say so and stop.
 - `AGENTS.md` — coding guidelines.
