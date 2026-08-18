@@ -251,7 +251,7 @@ jobs:
           token: ${{ steps.token.outputs.token }}
           app-slug: marin-external-runtime-updater
           base-branch: ${{ github.event.repository.default_branch }}
-          mode: ${{ github.event_name == 'schedule' && 'merge' || 'publish' }}
+          mode: ${{ (github.event_name == 'schedule' || inputs.merge) && 'merge' || 'publish' }}
 ```
 
 Pin `<REV>` to the same full commit used by `infra/pre-commit.py`. The updater
