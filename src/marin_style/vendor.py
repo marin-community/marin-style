@@ -143,14 +143,18 @@ def _rendered_assets(version: str, revision: str) -> dict[str, bytes]:
     }
 
 
-def managed_manifest() -> ManagedManifest:
-    """Return the installed package's rendered file manifest."""
-    revision = _revision()
-    rendered = _rendered_assets(_version(), revision)
+def _manifest_from_rendered(revision: str, rendered: dict[str, bytes]) -> ManagedManifest:
     return ManagedManifest(
         revision=revision,
         files=tuple((path, _digest(content)) for path, content in sorted(rendered.items())),
     )
+
+
+def managed_manifest() -> ManagedManifest:
+    """Return the installed package's rendered file manifest."""
+    revision = _revision()
+    rendered = _rendered_assets(_version(), revision)
+    return _manifest_from_rendered(revision, rendered)
 
 
 def managed_manifest_text() -> str:
@@ -231,10 +235,7 @@ def _sync(repo_root: Path | None, mode: SyncMode) -> SyncResult:
     version = _version()
     revision = _revision()
     rendered = _rendered_assets(version, revision)
-    manifest = ManagedManifest(
-        revision=revision,
-        files=tuple((path, _digest(content)) for path, content in sorted(rendered.items())),
-    )
+    manifest = _manifest_from_rendered(revision, rendered)
     manifest_text = _manifest_text(manifest)
     old_manifest = _read_manifest(root)
 
