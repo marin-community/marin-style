@@ -245,7 +245,6 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ steps.token.outputs.token }}
-      - uses: astral-sh/setup-uv@v7
       - uses: marin-community/marin-style/actions/update-consumer@<REV>
         with:
           token: ${{ steps.token.outputs.token }}
