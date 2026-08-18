@@ -18,7 +18,7 @@ The kit has two halves:
 
 ## Consumption model
 
-A consumer repo adopts the kit with four pieces:
+A consumer repo adopts the kit with five pieces:
 
 1. **A pinned git dev-dependency.** Add `marin-style` as a dev/tool dependency
    pinned to an exact revision, e.g. in `pyproject.toml`:
@@ -57,6 +57,13 @@ A consumer repo adopts the kit with four pieces:
    the agent guidance and skills into the repo (see below), then reference the
    core from the repo's `AGENTS.md`.
 
+5. **A repository-owned update workflow.** Consumers run a nightly workflow
+   that invokes `actions/update-consumer` at the same exact revision as the
+   lint and sync pins. The action advances every recognized pin, regenerates
+   manifest-owned files and a root `uv.lock` when applicable, then opens one
+   fixed update pull request. It polls the checks GitHub marks as required and
+   performs a head-bound squash merge only after they pass.
+
 ### `[tool.marin-style]` keys
 
 Per-repo behavior is read from a `[tool.marin-style]` table in the consumer
@@ -80,6 +87,7 @@ reads the consumer's own pyproject config).
 ```bash
 marin-style sync [--repo-root PATH]   # default: git toplevel of the cwd
 marin-style sync --check              # CI drift gate; nonzero if vendored files are stale
+marin-style managed-files             # print this revision's generated-file manifest as JSON
 ```
 
 `sync` writes:
@@ -89,11 +97,15 @@ marin-style sync --check              # CI drift gate; nonzero if vendored files
 - `assets/skills/<name>/*` → `<root>/.agents/skills/<name>/`
 
 Every vendored file carries a generated-by header, so a re-run overwrites it in
-place. Skills the repo authored itself are never touched. `sync` also creates a
-`.claude/skills` → `../.agents/skills` symlink if one does not already exist, and
-prints a reminder to reference `.agents/marin-style/AGENTS-core.md` from the
-repo's `AGENTS.md` if it does not already. Run `marin-style sync --check` in CI to
-fail when the vendored tree drifts from the pinned package.
+place. The checked-in `.agents/marin-style/manifest.json` records the exact
+generated paths and content hashes. A later sync removes an obsolete generated
+file only when its content still matches the old manifest; it stops if that file
+was edited. Skills the repo authored itself are never touched. `sync` also
+creates a `.claude/skills` → `../.agents/skills` symlink if one does not already
+exist, and prints a reminder to reference
+`.agents/marin-style/AGENTS-core.md` from the repo's `AGENTS.md` if it does not
+already. Run `marin-style sync --check` in CI to fail when the vendored tree or
+manifest drifts from the pinned package.
 
 ## Shared Echo records
 
@@ -191,6 +203,65 @@ experiments don't page anyone. The `report-failure-smoke` workflow in this repo
 (`workflow_dispatch`) exercises the whole path with a synthetic failure.
 
 Pin `@<REV>` to a tag or commit SHA, like every other consumption of this kit.
+
+## Automated updates (`actions/update-consumer`)
+
+Each consumer owns its schedule and credential boundary. The workflow creates
+a repository-scoped installation token from an `external-runtime-updater`
+environment whose deployment branch policy admits only the default branch,
+then checks out with that token and invokes the action at an exact commit:
+
+```yaml
+name: "Marin - Update marin-style"
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      merge:
+        description: Merge after protected checks pass
+        type: boolean
+        default: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment: external-runtime-updater
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: token
+        with:
+          client-id: Iv23liNdDvC85E67xNa6
+          private-key: ${{ secrets.DEPENDENCY_UPDATER_PRIVATE_KEY }}
+          owner: marin-community
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token }}
+      - uses: marin-community/marin-style/actions/update-consumer@<REV>
+        with:
+          token: ${{ steps.token.outputs.token }}
+          app-slug: marin-external-runtime-updater
+          base-branch: ${{ github.event.repository.default_branch }}
+          mode: ${{ (github.event_name == 'schedule' || inputs.merge) && 'merge' || 'publish' }}
+```
+
+Pin `<REV>` to the same full commit used by `infra/pre-commit.py`. The updater
+discovers that workflow reference and advances its own action pin in the pull
+request, so shared updater changes do not require separate fan-out PRs.
+
+The App may bypass the consumer's review-only ruleset and classic review rule.
+It must not bypass the ruleset that requires CI. The action reads the required
+checks from GitHub, revalidates the App-authored PR and expected head commit on
+every poll, and merges synchronously with `--match-head-commit`. A failed check
+leaves the pull request open and fails the nightly workflow.
 
 ## Agent prose cleanup (`actions/prose-cleanup`)
 
