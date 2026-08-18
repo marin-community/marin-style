@@ -17,6 +17,7 @@ from pathlib import Path
 
 PACKAGE = "marin_style"
 REVISION_PLACEHOLDER = "@MARIN_STYLE_REV@"
+DEFAULT_REVISION = "main"
 AGENTS_VENDOR_DIR = ".agents/marin-style"
 SKILLS_VENDOR_DIR = ".agents/skills"
 CLAUDE_SKILLS_LINK = ".claude/skills"
@@ -31,15 +32,15 @@ def _version() -> str:
 
 
 def _revision() -> str:
-    """Return the installed git commit, or main for an editable source checkout."""
+    """Return the installed git commit or the unpinned source fallback."""
     try:
         direct_url = metadata.distribution("marin-style").read_text("direct_url.json")
     except metadata.PackageNotFoundError:
-        return "main"
+        return DEFAULT_REVISION
     if direct_url is None:
-        return "main"
+        return DEFAULT_REVISION
     vcs = json.loads(direct_url).get("vcs_info", {})
-    return vcs.get("commit_id", "main")
+    return vcs.get("commit_id", DEFAULT_REVISION)
 
 
 def _note(version: str) -> str:

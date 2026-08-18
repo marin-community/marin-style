@@ -12,6 +12,9 @@ dependencies = [
     "requests>=2.32",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
 [project.scripts]
 marin-precommit = "marin_style.precommit:main"
 marin-style = "marin_style.cli:main"
