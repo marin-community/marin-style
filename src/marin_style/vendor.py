@@ -9,12 +9,14 @@ Every vendored file carries a header noting it is generated, so a re-run
 overwrites it in place. Skills the repo authored itself are never touched.
 """
 
+import json
 import subprocess
 from dataclasses import dataclass
 from importlib import metadata, resources
 from pathlib import Path
 
 PACKAGE = "marin_style"
+REVISION_PLACEHOLDER = "@MARIN_STYLE_REV@"
 AGENTS_VENDOR_DIR = ".agents/marin-style"
 SKILLS_VENDOR_DIR = ".agents/skills"
 CLAUDE_SKILLS_LINK = ".claude/skills"
@@ -26,6 +28,18 @@ def _version() -> str:
         return metadata.version("marin-style")
     except metadata.PackageNotFoundError:
         return "0.0.0+source"
+
+
+def _revision() -> str:
+    """Return the installed git commit, or main for an editable source checkout."""
+    try:
+        direct_url = metadata.distribution("marin-style").read_text("direct_url.json")
+    except metadata.PackageNotFoundError:
+        return "main"
+    if direct_url is None:
+        return "main"
+    vcs = json.loads(direct_url).get("vcs_info", {})
+    return vcs.get("commit_id", "main")
 
 
 def _note(version: str) -> str:
@@ -61,14 +75,14 @@ def _iter_assets() -> list[VendoredFile]:
     return files
 
 
-def _render(source: Path, version: str) -> str:
+def _render(source: Path, version: str, revision: str) -> str:
     """Return the source content with the vendor note inserted as a header.
 
     For files that open with YAML frontmatter (skill `SKILL.md`), the note goes
     in the body just below the closing `---` so it never disturbs the metadata
-    block. Everything else gets an HTML comment prepended.
+    block. Python files receive a Python comment; other files receive HTML.
     """
-    text = source.read_text()
+    text = source.read_text().replace(REVISION_PLACEHOLDER, revision)
     note = _note(version)
     comment = f"<!-- {note} -->"
 
@@ -78,6 +92,13 @@ def _render(source: Path, version: str) -> str:
             split = end + len("\n---\n")
             frontmatter, body = text[:split], text[split:]
             return f"{frontmatter}\n{comment}\n\n{body.lstrip()}"
+
+    if source.suffix == ".py":
+        header = f"# {note}"
+        if text.startswith("#!"):
+            shebang, body = text.split("\n", 1)
+            return f"{shebang}\n{header}\n{body}"
+        return f"{header}\n\n{text}"
 
     return f"{comment}\n\n{text}"
 
@@ -111,6 +132,7 @@ def sync(repo_root: Path | None = None, check: bool = False) -> SyncResult:
     """
     root = resolve_repo_root(repo_root)
     version = _version()
+    revision = _revision()
 
     written: list[Path] = []
     drifted: list[Path] = []
@@ -118,7 +140,7 @@ def sync(repo_root: Path | None = None, check: bool = False) -> SyncResult:
 
     for asset in _iter_assets():
         dest = root / asset.relative_dest
-        content = _render(asset.source, version)
+        content = _render(asset.source, version, revision)
 
         if check:
             if not dest.exists():

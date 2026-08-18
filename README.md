@@ -11,8 +11,10 @@ The kit has two halves:
 - **Enforcement** — a pre-commit linter and an agentic lint-review catalog, run
   through a small `infra/pre-commit.py` shim in each consumer repo.
 - **Guidance** — portable `AGENTS.md`/`TESTING.md` cores and a set of skills
-  (`commit`, `write-tests`, `debug`, `file-issue`, `writing-style`) that
-  `marin-style sync` vendors into the consumer repo's `.agents/` tree.
+  (`commit`, `write-tests`, `debug`, `consult-echo`, `task-logbook`,
+  `write-design-doc`, `write-ops-log`, `file-issue`, `writing-style`) that
+  `marin-style sync` vendors into the consumer repo's `.agents/` tree. Echo is
+  the default home for cross-project task records, designs, and incidents.
 
 ## Consumption model
 
@@ -92,6 +94,37 @@ place. Skills the repo authored itself are never touched. `sync` also creates a
 prints a reminder to reference `.agents/marin-style/AGENTS-core.md` from the
 repo's `AGENTS.md` if it does not already. Run `marin-style sync --check` in CI to
 fail when the vendored tree drifts from the pinned package.
+
+## Shared Echo records
+
+`marin-style echo` provides the portable Echo client used by the vendored
+skills. It works from any consumer repository, so an investigation or design in
+a fork is visible to agents working elsewhere:
+
+```bash
+marin-style echo search "scheduler held request" --limit 10
+marin-style echo get wiki:42
+marin-style echo work-log add \
+  --project "vllm:issue-123" \
+  --title "Held requests reproduce after preemption" \
+  --body "The minimal repro and scheduler trace are linked from issue #123."
+marin-style echo wiki add --file /tmp/vllm-scheduler-design.md
+```
+
+`marin-style sync` also vendors
+`.agents/skills/consult-echo/scripts/echo.py`. Its inline dependency is pinned
+to the exact kit commit that generated it, so agents can run the same commands
+through `uv run <path>` when the package entry point is not installed globally.
+
+The work log is an append-only stream of distilled milestones. Wiki entries are
+durable designs, incident records, and reusable cross-project guidance. Keep raw
+logs, test output, diffs, and run artifacts in their source systems and link
+them from Echo.
+
+Authentication reuses the cached credentials created by `iris login`. Agents
+and CI can instead use ambient service-account credentials admitted by Echo's
+IAP policy. `ECHO_API_URL` overrides the service URL and
+`ECHO_LOGIN_CLUSTER` selects the preferred cached Marin login.
 
 ## Tier A vs tier B
 

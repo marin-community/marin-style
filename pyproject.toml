@@ -1,13 +1,15 @@
 [project]
 name = "marin-style"
-version = "0.3.1"
+version = "0.4.0"
 description = "Marin coding standards as an installable kit: pre-commit linter, lint-review catalog, agent guidelines, and portable skills"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 dependencies = [
     "click>=8.1",
+    "google-auth>=2.35",
     "pyyaml>=6.0",
+    "requests>=2.32",
 ]
 
 [project.scripts]

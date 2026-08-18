@@ -4,12 +4,16 @@ from pathlib import Path
 
 import click
 
+from marin_style.echo import echo_group
 from marin_style.vendor import CORE_AGENTS_REF, SyncResult, sync
 
 
 @click.group()
 def main() -> None:
     """Marin coding-standards kit."""
+
+
+main.add_command(echo_group)
 
 
 @main.command(name="sync")

@@ -31,7 +31,8 @@ more on what should be included rather than tone.
 - Avoid section headings in normal bug and task issues. Use plain `Reproduce:`,
   `Expected:`, or `Done when:` labels only when they make the issue easier to
   act on.
-- Put extended investigation history in a linked comment, logbook, or artifact.
+- Put extended investigation history in Echo's work log or a linked source
+  artifact.
 - Do not prescribe an implementation unless the choice is part of the task.
 
 Before publishing, apply [ai-writing-donts.md](ai-writing-donts.md) to the exact
@@ -63,10 +64,11 @@ Treat experiment issues as part of the scientific record. Use them as a summary 
 ### Keep The Expected Structure
 
 - Maintain a clear TL;DR and evolving conclusion.
-- Link the research logbook, W&B runs, commits, and tags.
+- Link the Echo work log, W&B runs, commits, and tags.
 - Track the decision log and negative results.
 - Reflect current understanding instead of pasting raw logs.
-- Treat the logbook as the detailed record and the issue as the interpreted summary.
+- Treat the Echo work log as the detailed record and the issue as the
+  interpreted summary.
 
 ### Write Updates This Way
 
@@ -85,5 +87,7 @@ Treat experiment issues as part of the scientific record. Use them as a summary 
 - Do not let the issue become a chat log.
 - Do not forget to update the TL;DR or conclusion.
 - Do not lose the baseline.
-- Do not overly clutter the issue. A separate logbook should hold the full log; the issue is the interpreted summary.
-- Do not assume knowledge of the conversation/thread or the logbook. Each comment should be understandable in the context of the issue.
+- Do not overly clutter the issue. Echo should hold the full work log; the issue
+  is the interpreted summary.
+- Do not assume knowledge of the conversation thread or Echo work log. Each
+  comment should be understandable in the context of the issue.
