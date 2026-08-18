@@ -37,9 +37,23 @@ infra/pre-commit.py --all-files --fix
 - A PR description is the squash-merge commit message. Keep every fact a future
   reader needs to understand the behavior and rationale, including measured
   results and caveats when they affect review. Remove headings, diff narration,
-  and implementation inventories; put extended history in a linked issue,
-  design doc, logbook, or artifact. Follow the `commit` skill
+  and implementation inventories; put extended history in a linked Echo entry,
+  issue, or source artifact. Follow the `commit` skill
   (`.agents/skills/commit/SKILL.md`) when committing, pushing, or opening a PR.
+
+## Shared Knowledge and Task Records
+
+- Use `consult-echo` when prior Marin decisions, incidents, workflows, exact
+  errors, or cross-project context could inform a task.
+- Use Echo's append-only work log for long-running task milestones. Do not add
+  `.agents/logbooks/`, `.agents/ops/`, or another repository progress file by
+  default; follow the `task-logbook` skill.
+- Publish design proposals and durable debugging or incident summaries to the
+  Echo wiki with `write-design-doc` or `write-ops-log`. Link the canonical Echo
+  URL from the associated issue or PR.
+- Keep product documentation and subsystem runbooks in the repository when the
+  guidance belongs with that code. Echo is the default for records and designs
+  that should be discoverable across Marin projects.
 
 ## Ecosystem Costs
 

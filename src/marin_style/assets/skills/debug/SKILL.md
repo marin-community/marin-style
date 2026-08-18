@@ -1,45 +1,26 @@
 ---
 name: debug
-description: Debug a code bug with a structured debug log that records hypotheses, changes, and results.
+description: Debug code bugs and operational faults while recording distilled hypotheses, evidence, and outcomes in Marin's shared Echo work log.
 ---
 
 # Skill: Debug
 
-Systematic debugging for code-level bugs. Keep a structured debug log so each
-hypothesis, the change that tests it, and its result are recorded — this keeps a
-long investigation from looping and makes the reasoning reviewable.
+Invoke `consult-echo` before forming a new diagnosis when prior decisions,
+incidents, or exact errors could help. Use `task-logbook` to append distilled
+milestones to Echo during any multi-step investigation. Do not create a
+repository debug-log file unless the user explicitly asks for one.
 
 For infrastructure or operational faults, first read any operations runbook the
-repo provides and follow its matching section; the guardrails there (what you may
-and may not touch on shared infrastructure) take precedence.
+repo provides and follow its matching section. Its guardrails take precedence.
 
-## Code bugs
+Work one hypothesis at a time:
 
-Maintain an investigation log at `.agents/ops/<task-name>.md`. Keep agent
-working records out of the repository's public documentation. If `.agents/` is
-ignored, add the narrow exception needed to track `.agents/ops/`.
+1. Record the initial symptom and evidence in the Echo work log.
+2. State one falsifiable hypothesis and the smallest check that distinguishes it.
+3. Run the check, then append the result and its evidence URL or command output.
+4. Repeat until the cause is established or the investigation is blocked.
+5. Add a regression test for a code fix when one can catch the failure.
 
-```
-# Debugging log for <task>
-
-<goal>
-
-## Initial status
-<initial status, as reported or observed>
-
-## <Hypothesis N>
-The suspected source of the bug, or a change needed to isolate it.
-
-## Changes to make
-Which files you are altering and how.
-
-## Results
-Test results and any new hypotheses. Repeat the Hypothesis/Results cycle as needed.
-
-## Future work
-- [ ] Cleanups observed along the way
-```
-
-Work one hypothesis at a time: state it, make the smallest change that confirms
-or refutes it, record the result, then move on. When the fix lands, capture a
-regression test (see the `write-tests` skill) so the bug cannot return silently.
+At resolution, invoke `write-ops-log` for an infrastructure incident or a
+durable multi-step diagnosis. The final Echo wiki entry records the reusable
+cause, recovery, and evidence; the work log remains the chronological record.

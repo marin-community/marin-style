@@ -13,6 +13,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Self-lint with the packaged gate
         run: uv run marin-precommit --all-files
+      - name: Unit tests
+        run: uv run pytest
       - name: Vendor round-trip
         run: |
           tmp=$(mktemp -d)
