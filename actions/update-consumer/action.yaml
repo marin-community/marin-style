@@ -1,0 +1,44 @@
+name: Update marin-style consumer
+description: Create or merge a validated marin-style update in the current repository.
+
+inputs:
+  token:
+    description: Repository-scoped GitHub App installation token.
+    required: true
+  app-slug:
+    description: GitHub App slug expected to author the generated pull request.
+    required: true
+  base-branch:
+    description: Consumer repository default branch.
+    required: true
+  merge:
+    description: Merge after every protected check passes.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Update consumer
+      shell: bash
+      env:
+        APP_SLUG: ${{ inputs.app-slug }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        GH_TOKEN: ${{ inputs.token }}
+        MERGE_UPDATE: ${{ inputs.merge }}
+      run: |
+        set -euo pipefail
+        args=(
+          --repo-root "$GITHUB_WORKSPACE"
+          --repository "$GITHUB_REPOSITORY"
+          --base-branch "$BASE_BRANCH"
+          --app-slug "$APP_SLUG"
+        )
+        if [ "$MERGE_UPDATE" = "true" ]; then
+          args+=(--merge)
+        elif [ "$MERGE_UPDATE" != "false" ]; then
+          echo "merge must be true or false" >&2
+          exit 2
+        fi
+        PYTHONPATH="$GITHUB_ACTION_PATH/../../src" \
+          uv run --no-project --python 3.12 python -m marin_style.update_consumer "${args[@]}"
