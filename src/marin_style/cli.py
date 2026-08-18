@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from marin_style.echo import echo_group
-from marin_style.vendor import CORE_AGENTS_REF, SyncResult, sync
+from marin_style.vendor import CORE_AGENTS_REF, SyncResult, check_sync, managed_manifest_text, sync
 
 
 @click.group()
@@ -14,6 +14,12 @@ def main() -> None:
 
 
 main.add_command(echo_group)
+
+
+@main.command(name="managed-files")
+def managed_files_command() -> None:
+    """Print the installed package's generated-file manifest as JSON."""
+    click.echo(managed_manifest_text(), nl=False)
 
 
 @main.command(name="sync")
@@ -30,17 +36,17 @@ main.add_command(echo_group)
 )
 def sync_command(repo_root: Path | None, check: bool) -> None:
     """Vendor the packaged agent guidance and skills into a consumer repo."""
-    result = sync(repo_root=repo_root, check=check)
-
     if check:
+        result = check_sync(repo_root=repo_root)
         _report_check(result)
         return
 
+    result = sync(repo_root=repo_root)
     _report_sync(result)
 
 
 def _report_check(result: SyncResult) -> None:
-    if not result.missing and not result.drifted:
+    if not result.missing and not result.drifted and not result.stale and not result.manifest_drifted:
         click.echo("marin-style: vendored files are up to date.")
         return
 
@@ -48,8 +54,14 @@ def _report_check(result: SyncResult) -> None:
         click.echo(f"missing: {path}", err=True)
     for path in result.drifted:
         click.echo(f"stale:   {path}", err=True)
+    for path in result.stale:
+        click.echo(f"obsolete: {path}", err=True)
+    if result.manifest_drifted:
+        click.echo("stale:   .agents/marin-style/manifest.json", err=True)
     click.echo(
-        f"marin-style: {len(result.missing)} missing, {len(result.drifted)} stale. Run `marin-style sync`.",
+        "marin-style: "
+        f"{len(result.missing)} missing, {len(result.drifted)} stale, {len(result.stale)} obsolete. "
+        "Run `marin-style sync`.",
         err=True,
     )
     raise SystemExit(1)

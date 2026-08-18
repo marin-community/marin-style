@@ -80,6 +80,7 @@ reads the consumer's own pyproject config).
 ```bash
 marin-style sync [--repo-root PATH]   # default: git toplevel of the cwd
 marin-style sync --check              # CI drift gate; nonzero if vendored files are stale
+marin-style managed-files             # print this revision's generated-file manifest as JSON
 ```
 
 `sync` writes:
@@ -89,11 +90,15 @@ marin-style sync --check              # CI drift gate; nonzero if vendored files
 - `assets/skills/<name>/*` → `<root>/.agents/skills/<name>/`
 
 Every vendored file carries a generated-by header, so a re-run overwrites it in
-place. Skills the repo authored itself are never touched. `sync` also creates a
-`.claude/skills` → `../.agents/skills` symlink if one does not already exist, and
-prints a reminder to reference `.agents/marin-style/AGENTS-core.md` from the
-repo's `AGENTS.md` if it does not already. Run `marin-style sync --check` in CI to
-fail when the vendored tree drifts from the pinned package.
+place. The checked-in `.agents/marin-style/manifest.json` records the exact
+generated paths and content hashes. A later sync removes an obsolete generated
+file only when its content still matches the old manifest; it stops if that file
+was edited. Skills the repo authored itself are never touched. `sync` also
+creates a `.claude/skills` → `../.agents/skills` symlink if one does not already
+exist, and prints a reminder to reference
+`.agents/marin-style/AGENTS-core.md` from the repo's `AGENTS.md` if it does not
+already. Run `marin-style sync --check` in CI to fail when the vendored tree or
+manifest drifts from the pinned package.
 
 ## Shared Echo records
 
