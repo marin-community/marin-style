@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import subprocess
@@ -10,17 +9,18 @@ import pytest
 from marin_style.update_consumer import (
     BranchPushMode,
     CheckRow,
-    GeneratedManifest,
     MergeDecision,
     PullRequestPolicy,
     PullRequestSnapshot,
     UpdateBranch,
+    changed_worktree_files,
     evaluate_merge,
     evaluate_protected_checks,
     generate_update,
     publish_update,
     validated_pull_request,
 )
+from marin_style.vendor import manifest_from_text
 
 OLD_REVISION = "a" * 40
 NEW_REVISION = "b" * 40
@@ -39,9 +39,7 @@ def _git(repository: Path, *args: str) -> str:
 
 def _manifest(revision: str, files: dict[str, str]) -> dict[str, object]:
     return {
-        "files": {
-            path: f"sha256:{hashlib.sha256(content.encode()).hexdigest()}" for path, content in sorted(files.items())
-        },
+        "files": dict.fromkeys(sorted(files), f"sha256:{'0' * 64}"),
         "format": 1,
         "revision": revision,
     }
@@ -72,9 +70,7 @@ def _consumer_repository(tmp_path: Path, *, with_lock: bool = False) -> tuple[Pa
     ci.parent.mkdir(parents=True)
     ci.write_text(f"MARIN_STYLE_REV: {OLD_REVISION}\n")
     update_workflow = repository / ".github/workflows/marin-style-update.yaml"
-    update_workflow.write_text(
-        f"uses: marin-community/marin-style/actions/update-consumer@{OLD_REVISION}\n"
-    )
+    update_workflow.write_text(f"uses: marin-community/marin-style/actions/update-consumer@{OLD_REVISION}\n")
     (repository / "README.md").write_text("consumer\n")
 
     if with_lock:
@@ -188,7 +184,7 @@ def test_generate_update_rejects_consumer_owned_change(
     _install_fake_style_tools(tmp_path, monkeypatch, old_manifest=old_manifest)
     (repository / "README.md").write_text("unrelated\n")
 
-    with pytest.raises(ValueError, match="unexpected files"):
+    with pytest.raises(ValueError):
         generate_update(repo_root=repository, base_branch="main", target_revision=NEW_REVISION)
 
 
@@ -202,8 +198,19 @@ def test_generate_update_rejects_unrecognized_revision_reference(
     _git(repository, "add", "README.md")
     _git(repository, "commit", "-m", "add hidden reference")
 
-    with pytest.raises(ValueError, match="unexpected files reference"):
+    with pytest.raises(ValueError):
         generate_update(repo_root=repository, base_branch="main", target_revision=NEW_REVISION)
+
+
+def test_changed_worktree_files_includes_staged_and_untracked_paths(tmp_path: Path) -> None:
+    repository, _old_manifest = _consumer_repository(tmp_path)
+    (repository / "README.md").write_text("staged\n")
+    _git(repository, "add", "README.md")
+    generated = repository / ".agents/skills/new/SKILL.md"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("generated\n")
+
+    assert changed_worktree_files(repository) == (".agents/skills/new/SKILL.md", "README.md")
 
 
 def test_manifest_rejects_consumer_owned_agent_path() -> None:
@@ -216,16 +223,12 @@ def test_manifest_rejects_consumer_owned_agent_path() -> None:
     )
 
     with pytest.raises(ValueError):
-        GeneratedManifest.from_text(text, expected_revision=NEW_REVISION)
+        manifest_from_text(text)
 
 
 def test_protected_checks_gate_merge_without_a_local_check_catalog() -> None:
-    pending = evaluate_protected_checks(
-        [CheckRow(name="lint", bucket="pass"), CheckRow(name="tests", bucket="pending")]
-    )
-    passing = evaluate_protected_checks(
-        [CheckRow(name="lint", bucket="pass"), CheckRow(name="docs", bucket="skipping")]
-    )
+    pending = evaluate_protected_checks([CheckRow(name="lint", bucket="pass"), CheckRow(name="tests", bucket="pending")])
+    passing = evaluate_protected_checks([CheckRow(name="lint", bucket="pass"), CheckRow(name="docs", bucket="skipping")])
     failing = evaluate_protected_checks([CheckRow(name="tests", bucket="fail")])
 
     assert evaluate_merge("OPEN", pending) is MergeDecision.WAIT

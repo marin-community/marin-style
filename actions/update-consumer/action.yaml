@@ -11,10 +11,10 @@ inputs:
   base-branch:
     description: Consumer repository default branch.
     required: true
-  merge:
-    description: Merge after every protected check passes.
+  mode:
+    description: Publish the pull request or merge after every protected check passes.
     required: false
-    default: "true"
+    default: merge
 
 runs:
   using: composite
@@ -25,7 +25,7 @@ runs:
         APP_SLUG: ${{ inputs.app-slug }}
         BASE_BRANCH: ${{ inputs.base-branch }}
         GH_TOKEN: ${{ inputs.token }}
-        MERGE_UPDATE: ${{ inputs.merge }}
+        UPDATE_MODE: ${{ inputs.mode }}
       run: |
         set -euo pipefail
         args=(
@@ -33,12 +33,7 @@ runs:
           --repository "$GITHUB_REPOSITORY"
           --base-branch "$BASE_BRANCH"
           --app-slug "$APP_SLUG"
+          --mode "$UPDATE_MODE"
         )
-        if [ "$MERGE_UPDATE" = "true" ]; then
-          args+=(--merge)
-        elif [ "$MERGE_UPDATE" != "false" ]; then
-          echo "merge must be true or false" >&2
-          exit 2
-        fi
         PYTHONPATH="$GITHUB_ACTION_PATH/../../src" \
           uv run --no-project --python 3.12 python -m marin_style.update_consumer "${args[@]}"

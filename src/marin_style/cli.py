@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from marin_style.echo import echo_group
-from marin_style.vendor import CORE_AGENTS_REF, SyncResult, check_sync, managed_manifest_text, sync
+from marin_style.vendor import CORE_AGENTS_REF, MANIFEST_PATH, SyncResult, check_sync, managed_manifest_text, sync
 
 
 @click.group()
@@ -57,7 +57,7 @@ def _report_check(result: SyncResult) -> None:
     for path in result.stale:
         click.echo(f"obsolete: {path}", err=True)
     if result.manifest_drifted:
-        click.echo("stale:   .agents/marin-style/manifest.json", err=True)
+        click.echo(f"stale:   {MANIFEST_PATH}", err=True)
     click.echo(
         "marin-style: "
         f"{len(result.missing)} missing, {len(result.drifted)} stale, {len(result.stale)} obsolete. "

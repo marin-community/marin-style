@@ -177,22 +177,20 @@ def _manifest_text(manifest: ManagedManifest) -> str:
     )
 
 
-def _read_manifest(root: Path) -> ManagedManifest | None:
-    path = root / MANIFEST_PATH
-    if path.is_symlink():
-        raise ValueError(f"marin-style manifest must be a regular file: {path}")
-    if not path.exists():
-        return None
-    payload = json.loads(path.read_text())
+def manifest_from_text(text: str) -> ManagedManifest:
+    """Parse and validate a managed-file manifest."""
+    payload = json.loads(text)
     if not isinstance(payload, dict) or set(payload) != {"format", "revision", "files"}:
-        raise ValueError(f"invalid marin-style manifest: {path}")
+        raise ValueError("invalid marin-style manifest shape")
     if payload["format"] != MANIFEST_FORMAT or not isinstance(payload["revision"], str):
-        raise ValueError(f"unsupported marin-style manifest: {path}")
+        raise ValueError("unsupported marin-style manifest")
     files = payload["files"]
-    if not isinstance(files, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in files.items()
+    if (
+        not isinstance(files, dict)
+        or not files
+        or not all(isinstance(key, str) and isinstance(value, str) for key, value in files.items())
     ):
-        raise ValueError(f"invalid marin-style manifest files: {path}")
+        raise ValueError("invalid marin-style manifest files")
     for relative, digest in files.items():
         _managed_path(relative)
         if CONTENT_DIGEST.fullmatch(digest) is None:
@@ -201,6 +199,19 @@ def _read_manifest(root: Path) -> ManagedManifest | None:
         revision=payload["revision"],
         files=tuple(sorted(files.items())),
     )
+
+
+def read_manifest(root: Path) -> ManagedManifest | None:
+    """Read a repository's managed-file manifest when present."""
+    path = root / MANIFEST_PATH
+    if path.is_symlink():
+        raise ValueError(f"marin-style manifest must be a regular file: {path}")
+    if not path.exists():
+        return None
+    try:
+        return manifest_from_text(path.read_text())
+    except ValueError as error:
+        raise ValueError(f"invalid marin-style manifest: {path}: {error}") from error
 
 
 def resolve_repo_root(repo_root: Path | None) -> Path:
@@ -237,7 +248,7 @@ def _sync(repo_root: Path | None, mode: SyncMode) -> SyncResult:
     rendered = _rendered_assets(version, revision)
     manifest = _manifest_from_rendered(revision, rendered)
     manifest_text = _manifest_text(manifest)
-    old_manifest = _read_manifest(root)
+    old_manifest = read_manifest(root)
 
     written: list[Path] = []
     drifted: list[Path] = []

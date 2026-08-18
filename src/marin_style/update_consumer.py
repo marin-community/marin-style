@@ -12,59 +12,27 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 
+from marin_style.vendor import MANIFEST_PATH, ManagedManifest, manifest_from_text, read_manifest
+
 MARIN_STYLE_REPOSITORY = "https://github.com/marin-community/marin-style"
 MARIN_STYLE_PACKAGE = "marin-style"
-MARIN_STYLE_MANIFEST = ".agents/marin-style/manifest.json"
 MARIN_STYLE_BRANCH = "automation/marin-style"
 MARIN_STYLE_TITLE = "[dependencies] Advance marin-style"
+MARIN_STYLE_MAIN_REF = "refs/heads/main"
 CANONICAL_PIN_FILE = "infra/pre-commit.py"
 UV_LOCK_FILE = "uv.lock"
-MANAGED_PREFIXES = (".agents/marin-style/", ".agents/skills/")
 DEPENDENCY_UPDATE_LABELS = ("agent-generated", "dependencies")
 PASS_CHECK_BUCKETS = frozenset({"pass", "skipping"})
 PENDING_CHECK_BUCKET = "pending"
+DEFAULT_MERGE_TIMEOUT = 2400.0
+DEFAULT_POLL_INTERVAL = 30.0
 REVISION = re.compile(r"[0-9a-f]{40}")
 MARIN_STYLE_PIN = re.compile(rf"{re.escape(MARIN_STYLE_REPOSITORY)}(?:\.git)?@([0-9a-f]{{40}})")
-CONTENT_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 PR_BODY = (
     "Advance marin-style to `{revision}` and regenerate its shared agent guidance.\n\n"
     "Changed paths are restricted to discovered marin-style pins, the generated lockfile when present, "
     "and files owned by the old and new manifests.\n"
 )
-
-
-@dataclass(frozen=True)
-class GeneratedManifest:
-    """Exact paths and hashes owned by one marin-style revision."""
-
-    revision: str
-    files: tuple[tuple[str, str], ...]
-
-    @classmethod
-    def from_text(cls, text: str, *, expected_revision: str) -> "GeneratedManifest":
-        payload = json.loads(text)
-        if not isinstance(payload, dict) or set(payload) != {"files", "format", "revision"}:
-            raise ValueError("invalid marin-style manifest shape")
-        if payload["format"] != 1 or payload["revision"] != expected_revision:
-            raise ValueError(f"manifest does not describe marin-style revision {expected_revision}")
-        files = payload["files"]
-        if not isinstance(files, dict) or not files:
-            raise ValueError("marin-style manifest has no files")
-        for path, digest in files.items():
-            if not isinstance(path, str) or not isinstance(digest, str):
-                raise ValueError("marin-style manifest files must map paths to digests")
-            relative = PurePosixPath(path)
-            if (
-                relative.is_absolute()
-                or relative.as_posix() != path
-                or ".." in relative.parts
-                or not path.startswith(MANAGED_PREFIXES)
-                or path == MARIN_STYLE_MANIFEST
-            ):
-                raise ValueError(f"invalid marin-style managed path: {path!r}")
-            if CONTENT_DIGEST.fullmatch(digest) is None:
-                raise ValueError(f"invalid digest for marin-style managed path: {path!r}")
-        return cls(revision=expected_revision, files=tuple(sorted(files.items())))
 
 
 @dataclass(frozen=True)
@@ -159,6 +127,11 @@ class ConsumerUpdateStatus(StrEnum):
     MERGED = "merged"
 
 
+class UpdateMode(StrEnum):
+    PUBLISH = "publish"
+    MERGE = "merge"
+
+
 @dataclass(frozen=True)
 class ConsumerUpdateResult:
     status: ConsumerUpdateStatus
@@ -175,14 +148,14 @@ def _gh_json(*args: str) -> object:
 
 def resolve_target_revision() -> str:
     """Return the exact commit currently at marin-style's default branch."""
-    output = _run("git", "ls-remote", MARIN_STYLE_REPOSITORY, "refs/heads/main")
+    output = _run("git", "ls-remote", MARIN_STYLE_REPOSITORY, MARIN_STYLE_MAIN_REF)
     fields = output.split()
-    if len(fields) != 2 or fields[1] != "refs/heads/main" or REVISION.fullmatch(fields[0]) is None:
+    if len(fields) != 2 or fields[1] != MARIN_STYLE_MAIN_REF or REVISION.fullmatch(fields[0]) is None:
         raise ValueError(f"git returned an invalid marin-style main reference: {output!r}")
     return fields[0]
 
 
-def _manifest_for_revision(revision: str) -> GeneratedManifest:
+def _manifest_for_revision(revision: str) -> ManagedManifest:
     output = _run(
         "uvx",
         "--from",
@@ -190,14 +163,19 @@ def _manifest_for_revision(revision: str) -> GeneratedManifest:
         "marin-style",
         "managed-files",
     )
-    return GeneratedManifest.from_text(output, expected_revision=revision)
+    manifest = manifest_from_text(output)
+    if manifest.revision != revision:
+        raise ValueError(f"manifest does not describe marin-style revision {revision}")
+    return manifest
 
 
-def _checked_in_manifest(repo_root: Path, *, expected_revision: str) -> GeneratedManifest:
-    path = repo_root / MARIN_STYLE_MANIFEST
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"consumer must contain a regular marin-style manifest: {path}")
-    return GeneratedManifest.from_text(path.read_text(), expected_revision=expected_revision)
+def _checked_in_manifest(repo_root: Path, *, expected_revision: str) -> ManagedManifest:
+    manifest = read_manifest(repo_root)
+    if manifest is None:
+        raise ValueError(f"consumer has no marin-style manifest at {repo_root / MANIFEST_PATH}")
+    if manifest.revision != expected_revision:
+        raise ValueError(f"manifest does not describe marin-style revision {expected_revision}")
+    return manifest
 
 
 def _old_revision(repo_root: Path) -> str:
@@ -234,7 +212,7 @@ def _direct_pin_files(
     managed_paths: frozenset[str],
     uses_uv_lock: bool,
 ) -> tuple[str, ...]:
-    ignored = {*managed_paths, MARIN_STYLE_MANIFEST}
+    ignored = {*managed_paths, MANIFEST_PATH}
     if uses_uv_lock:
         ignored.add(UV_LOCK_FILE)
     candidates = _tracked_revision_paths(repo_root, revision) - ignored
@@ -298,7 +276,7 @@ def _update_uv_lock(repo_root: Path, *, old_revision: str, new_revision: str) ->
 
 def changed_worktree_files(repo_root: Path) -> tuple[str, ...]:
     """Return tracked and untracked changes relative to the checked-out base."""
-    tracked = _run("git", "diff", "--name-only", cwd=repo_root)
+    tracked = _run("git", "diff", "--name-only", "HEAD", cwd=repo_root)
     untracked = _run("git", "ls-files", "--others", "--exclude-standard", cwd=repo_root)
     return tuple(sorted({*tracked.splitlines(), *untracked.splitlines()}))
 
@@ -359,7 +337,7 @@ def generate_update(*, repo_root: Path, base_branch: str, target_revision: str) 
         base_branch=base_branch,
         head_branch=MARIN_STYLE_BRANCH,
         title=MARIN_STYLE_TITLE,
-        allowed_files=frozenset({*pin_files, *lock_files, *old_paths, *new_paths, MARIN_STYLE_MANIFEST}),
+        allowed_files=frozenset({*pin_files, *lock_files, *old_paths, *new_paths, MANIFEST_PATH}),
     )
     changed_files = validate_changed_files(changed_worktree_files(repo_root), policy=policy)
     if not changed_files:
@@ -373,6 +351,7 @@ def generate_update(*, repo_root: Path, base_branch: str, target_revision: str) 
 
 
 def _open_pull_request(repository: str, policy: PullRequestPolicy) -> str:
+    """Return the matching open pull request URL, or an empty string when absent."""
     payload = _gh_json(
         "pr",
         "list",
@@ -616,7 +595,7 @@ def protected_check_rows(pr: str, repository: str) -> tuple[CheckRow, ...]:
 
 
 def evaluate_protected_checks(rows: Iterable[CheckRow]) -> RequiredCheckGate:
-    """Classify GitHub's required checks without maintaining a local check list."""
+    """Classify required check rows as passing, pending, or failing."""
     buckets: dict[str, str] = {}
     for row in rows:
         if row.name in buckets:
@@ -699,7 +678,8 @@ def _preflight(repository: str, base_branch: str) -> None:
     if owner != "marin-community" or separator != "/" or not name or "/" in name:
         raise ValueError(f"invalid consumer repository: {repository!r}")
     payload = _gh_json("repo", "view", repository, "--json", "defaultBranchRef")
-    if not isinstance(payload, dict) or payload.get("defaultBranchRef", {}).get("name") != base_branch:
+    default_branch = payload.get("defaultBranchRef") if isinstance(payload, dict) else None
+    if not isinstance(default_branch, dict) or default_branch.get("name") != base_branch:
         raise ValueError(f"{base_branch!r} is not the default branch for {repository}")
     for label in DEPENDENCY_UPDATE_LABELS:
         _run("gh", "api", f"repos/{repository}/labels/{label}")
@@ -711,9 +691,9 @@ def update_consumer(
     repository: str,
     base_branch: str,
     app_slug: str,
-    merge: bool,
-    timeout: float = 2400,
-    poll_interval: float = 30,
+    mode: UpdateMode,
+    timeout: float = DEFAULT_MERGE_TIMEOUT,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
 ) -> ConsumerUpdateResult:
     """Publish the latest marin-style update and optionally merge it after protected checks."""
     _preflight(repository, base_branch)
@@ -742,7 +722,7 @@ def update_consumer(
         update=update,
         app_slug=app_slug,
     )
-    if merge:
+    if mode is UpdateMode.MERGE:
         merge_when_protected_checks_green(
             pr=published.url,
             repository=repository,
@@ -752,7 +732,7 @@ def update_consumer(
             timeout=timeout,
             poll_interval=poll_interval,
         )
-    status = ConsumerUpdateStatus.MERGED if merge else ConsumerUpdateStatus.PUBLISHED
+    status = ConsumerUpdateStatus.MERGED if mode is UpdateMode.MERGE else ConsumerUpdateStatus.PUBLISHED
     return ConsumerUpdateResult(status=status, pull_request_url=published.url)
 
 
@@ -762,9 +742,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository", required=True)
     parser.add_argument("--base-branch", required=True)
     parser.add_argument("--app-slug", required=True)
-    parser.add_argument("--merge", action="store_true")
-    parser.add_argument("--timeout", type=float, default=2400)
-    parser.add_argument("--poll-interval", type=float, default=30)
+    parser.add_argument("--mode", type=UpdateMode, choices=UpdateMode, required=True)
+    parser.add_argument("--timeout", type=float, default=DEFAULT_MERGE_TIMEOUT)
+    parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL)
     return parser
 
 
@@ -775,7 +755,7 @@ def main() -> None:
         repository=args.repository,
         base_branch=args.base_branch,
         app_slug=args.app_slug,
-        merge=args.merge,
+        mode=UpdateMode(args.mode),
         timeout=args.timeout,
         poll_interval=args.poll_interval,
     )
