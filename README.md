@@ -184,7 +184,9 @@ The action does three things, in order:
    (default `[nightly-<lane>]`; override `issue-title-prefix` to attach to another
    convention, e.g. marin's `[canary-<lane>]` issues filed by its inline Claude
    triage) and creates it if absent. Every failure appends one comment with the
-   run URL and a failed-job log excerpt, so a flaky week is one issue, not seven.
+   run URL and a failed-job log excerpt. A repository-local fix PR closes the
+   issue with `Fixes #NNNN`; the next failure then creates a fresh issue. When no
+   fix PR is warranted, close the issue after the lane returns to green.
 2. **Weaver auto-triage.** The failure comment is addressed *to* `@weaverbot`
    (the loom trigger phrase) and posted with `trigger-token`. The loom deployment
    launches a weaver session against the repo — or forwards the comment to the
