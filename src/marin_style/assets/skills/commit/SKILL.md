@@ -159,6 +159,11 @@ Fixes #1234
 (auto-closes on merge) or `Part of #NNNN` (partial work). Do not invent an issue
 just to satisfy this — omit the link when none exists.
 
+For an automated failure-tracking issue, use `Fixes #NNNN` when the PR is
+expected to restore the failing lane. A later scheduled run may confirm the fix,
+but that does not make the PR partial. Use `Part of #NNNN` only when the PR is
+known not to resolve the tracked failure.
+
 **Specifications (>500 LOC only).** A genuinely large PR must link a spec in an
 issue or Echo design entry. Name the important design decisions in the PR body
 and link the spec for module maps, code excerpts, and detailed rationale.

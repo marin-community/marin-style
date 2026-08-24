@@ -96,8 +96,9 @@ runs:
         Automated tracking issue for failures of the \`$LANE\` scheduled run.
 
         Each failure adds a comment below with the run link and a log excerpt, and asks
-        a weaver session to triage. Close this issue once the lane is green again; the
-        next failure opens a fresh one.
+        a weaver session to triage. A repository-local fix PR should close this issue
+        with a Fixes link. If no fix PR is warranted, close the issue once the lane
+        is green again. The next failure opens a fresh issue.
         EOF
           issue_url=$(gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "$prefix scheduled run failing" \
@@ -118,6 +119,9 @@ runs:
         - If the fix belongs in this repo, open a PR. If the cause is Marin/Iris
           infrastructure, file or link an issue in marin-community/marin instead and
           note it here.
+        - A PR in this repo that fixes the tracked failure must end its body with
+          Fixes #$issue_number so merging it closes this issue. Use
+          Part of #$issue_number only when the PR does not restore the lane.
         - When you are completely done (findings posted, any PR opened), clean up
           after yourself: post your wrap-up comment, then as your literal final
           action run \`loom session archive \$(git branch --show-current)\` to tear
