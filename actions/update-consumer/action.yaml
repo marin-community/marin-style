@@ -1,0 +1,42 @@
+name: Update marin-style consumer
+description: Create or merge a validated marin-style update in the current repository.
+
+inputs:
+  token:
+    description: Repository-scoped GitHub App installation token.
+    required: true
+  app-slug:
+    description: GitHub App slug expected to author the generated pull request.
+    required: true
+  base-branch:
+    description: Consumer repository default branch.
+    required: true
+  mode:
+    description: Publish the pull request or merge after every protected check passes.
+    required: false
+    default: merge
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+      with:
+        version: "0.11.21"
+    - name: Update consumer
+      shell: bash
+      env:
+        APP_SLUG: ${{ inputs.app-slug }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        GH_TOKEN: ${{ inputs.token }}
+        UPDATE_MODE: ${{ inputs.mode }}
+      run: |
+        set -euo pipefail
+        args=(
+          --repo-root "$GITHUB_WORKSPACE"
+          --repository "$GITHUB_REPOSITORY"
+          --base-branch "$BASE_BRANCH"
+          --app-slug "$APP_SLUG"
+          --mode "$UPDATE_MODE"
+        )
+        PYTHONPATH="$GITHUB_ACTION_PATH/../../src" \
+          uv run --no-project --python 3.12 python -m marin_style.update_consumer "${args[@]}"
