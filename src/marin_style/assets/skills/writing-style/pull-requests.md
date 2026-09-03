@@ -75,6 +75,9 @@ complete parity data.
 
 Before committing or calling `gh pr create` or `gh pr edit`:
 
+Use `--repo` with the repository resolved from `git remote get-url origin` on
+every `gh pr` command. Do not rely on `gh`'s default-repository heuristic.
+
 1. Read the exact title and body that the command will receive, not the notes
    used to draft them.
 2. Count the title characters. Inspect the body length as a signal, not a gate:
@@ -85,7 +88,7 @@ Before committing or calling `gh pr create` or `gh pr edit`:
 4. Check that the title, opening sentence, and issue link agree with the actual
    branch scope.
 5. After creating or editing the PR, fetch the published text with
-   `gh pr view --json title,body` and correct any text added or altered by the
+   `gh pr view --repo "$repo" --json title,body` and correct any text added or altered by the
    publishing tool.
 
 Use `printf %s '<title>' | wc -m` for the title. Inspect the body file itself
