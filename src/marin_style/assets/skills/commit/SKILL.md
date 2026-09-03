@@ -181,7 +181,7 @@ and link the spec for module maps, code excerpts, and detailed rationale.
 **Inspect the payload.** Draft the body in a uniquely named temporary file and
 use `--body-file`. Re-open that file and apply the final compression pass before
 publishing. After creating or editing the PR, fetch the exact `title,body` with
-`gh pr view --repo "$repo" --json title,body` and immediately correct text inserted by a tool
+`gh pr view --repo "$repo" <N> --json title,body` and immediately correct text inserted by a tool
 or stale template.
 
 **Create it.** Unless the user says otherwise and permissions allow, push to a

@@ -88,7 +88,7 @@ every `gh pr` command. Do not rely on `gh`'s default-repository heuristic.
 4. Check that the title, opening sentence, and issue link agree with the actual
    branch scope.
 5. After creating or editing the PR, fetch the published text with
-   `gh pr view --repo "$repo" --json title,body` and correct any text added or altered by the
+   `gh pr view --repo "$repo" <N> --json title,body` and correct any text added or altered by the
    publishing tool.
 
 Use `printf %s '<title>' | wc -m` for the title. Inspect the body file itself
