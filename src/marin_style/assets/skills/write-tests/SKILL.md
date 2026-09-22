@@ -19,14 +19,19 @@ numerical tolerances before choosing a test style.
 1. Find existing tests for the touched behavior before creating a new file.
 2. Check for repo-specific testing rules for commands, markers, fakes, mocks, and
    numerical tolerances.
-3. Name the behavior that should fail if the code is wrong.
-4. Write the smallest test that observes that behavior through a public API,
+3. Name the behavior that should fail if the code is wrong. For a scalar or
+   configuration guard, also name the reported regression or
+   compatibility-critical public contract it protects. If there is none, do not
+   add a standalone guard test.
+4. Write the smallest test that observes consequential behavior through a public API,
    structured output, persisted state, or real side effect.
 5. Prefer a regression test before the fix when fixing a bug. Ensure the test
    fails before implementing the bug fix.
 6. Keep test setup realistic but small. Use fixtures and parameterization to
    remove duplication.
-7. Run the narrow test first, then the relevant package test command. Before a
+7. Prefer one behavior test that covers the valid outcome and meaningful
+   boundary over separate tests for every validation predicate.
+8. Run the narrow test first, then the relevant package test command. Before a
    PR, run the repo lint entry point required by `AGENTS.md`.
 
 ## Default Commands
