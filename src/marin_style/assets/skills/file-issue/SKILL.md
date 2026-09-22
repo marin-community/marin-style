@@ -6,8 +6,8 @@ description: File a GitHub issue for a bug or improvement found this session.
 # Skill: File GitHub Issue
 
 Create a GitHub issue in the current repository from bugs, regressions, or
-improvements identified in the current conversation. `gh` defaults to the repo of
-the current checkout; pass `--repo <owner>/<name>` only to target a different one.
+improvements identified in the current conversation. Resolve the repository from
+the checkout's `origin`; do not rely on `gh`'s default-repository heuristic.
 
 ## Background
 
@@ -103,10 +103,18 @@ Pick the kind (bug, task, or experiment). If unsure, ask the user.
 
 ### 3. Duplicate Check
 
+Resolve the GitHub repository once and use it on every following `gh issue`
+command. Stop if `origin` is missing or cannot be resolved; do not fall back to
+another remote.
+
+```bash
+repo="$(gh repo view "$(git remote get-url origin)" --json nameWithOwner --jq .nameWithOwner)"
+```
+
 Search for existing issues first:
 
 ```bash
-gh issue list --state open --search "<keyword>"
+gh issue list --repo "$repo" --state open --search "<keyword>"
 ```
 
 If a match exists, tell the user and offer to comment on it instead.
@@ -170,6 +178,7 @@ cat > "$body_file" <<'EOF'
 EOF
 
 issue_url="$(gh issue create \
+  --repo "$repo" \
   --title "<title>" \
   --label "agent-generated" \
   --body-file "$body_file")"
@@ -184,7 +193,7 @@ unrelated shell output (pre-commit logs, pytest session headers, prompt
 transcripts). If it does, clean the draft before posting.
 
 After creating the issue, fetch its published text with
-`gh issue view "$issue_url" --json title,body` and correct any text added or
+`gh issue view --repo "$repo" "$issue_url" --json title,body` and correct any text added or
 altered by the publishing tool.
 
 ### 8. Report Back
