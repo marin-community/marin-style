@@ -286,6 +286,59 @@ Consumer workflows track these trusted actions on `main`:
 Use `marin-community/marin-style/actions/<name>@main` so workflow behavior can
 be maintained in this repository.
 
+## Stale issues and pull requests
+
+`.github/workflows/reusable-stale.yaml` shares Marin's inactivity policy. Issues
+receive a warning after 83 inactive days and close seven days later. Pull requests
+receive a warning after 23 inactive days and close seven days later. Activity
+removes the `stale` label and restarts the timer. Issues labeled `pinned`,
+`security`, `bug`, or `enhancement` are exempt; pull requests labeled `pinned`,
+`security`, `work-in-progress`, or `wip` are exempt.
+
+Add this caller to the consumer's default branch as
+`.github/workflows/marin-stale.yaml`:
+
+```yaml
+name: Ops - Stale
+on:
+  schedule:
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Preview without changing issues or PRs
+        type: boolean
+        default: true
+permissions:
+  issues: write
+  pull-requests: write
+concurrency:
+  group: ops-stale
+  cancel-in-progress: false
+jobs:
+  stale:
+    if: github.repository_owner == 'marin-community'
+    uses: marin-community/marin-style/.github/workflows/reusable-stale.yaml@main
+    with:
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+```
+
+The workflow uses the caller's `GITHUB_TOKEN` and operates on the caller's issues
+and pull requests. It needs no extra secrets or checkout. The `@main` reference
+adopts reviewed policy changes on the next run; the underlying action is pinned
+to a commit. The policy runs only for repositories owned by `marin-community`.
+
+Merge the shared workflow before its consumer PRs. Replace an existing stale
+workflow instead of scheduling two. Enable Actions and the caller in each repo;
+fork schedules start disabled. Run `gh workflow run marin-stale.yaml --repo
+marin-community/REPO --field dry-run=true` and inspect the run before normal
+operation. Manual runs default to preview; scheduled runs apply the policy.
+GitHub can disable schedules in public repos after 60 days without repository
+activity, so check workflow state when adopting or revisiting a quiet repo.
+
+Pull requests that change the shared workflow run a preview with a token that
+can only read issues and pull requests.
+
 ## Adding a repo
 
 1. Add the pinned `marin-style` git dev-dependency.

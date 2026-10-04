@@ -1,0 +1,46 @@
+name: Shared stale policy
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: Preview labels, comments, and closures without changing issues or PRs
+        type: boolean
+        default: false
+
+jobs:
+  stale:
+    if: github.repository_owner == 'marin-community'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10.3.0
+        with:
+          repo-token: ${{ github.token }}
+          debug-only: ${{ inputs.dry-run }}
+          # Issues: warn after 83 inactive days, close 7 days later.
+          days-before-issue-stale: 83
+          days-before-issue-close: 7
+          # PRs: warn after 23 inactive days, close 7 days later.
+          days-before-pr-stale: 23
+          days-before-pr-close: 7
+          stale-issue-label: stale
+          stale-issue-message: |
+            This issue has been inactive for 83 days and is marked as stale.
+            If there is no further activity within 7 days, it will be automatically closed.
+            If you believe this issue is still relevant, please add a comment to keep it open.
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity.
+            If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
+          stale-pr-label: stale
+          stale-pr-message: |
+            This pull request has been inactive for 23 days and is marked as stale.
+            If there is no further activity within 7 days, it will be automatically closed.
+            If you believe this PR should remain open, please add a comment or update the PR.
+          close-pr-message: |
+            This pull request has been automatically closed due to inactivity.
+            If you would like to continue working on this, please reopen it or create a new PR.
+          remove-stale-when-updated: true
+          operations-per-run: 300
+          exempt-issue-labels: pinned,security,bug,enhancement
+          exempt-pr-labels: pinned,security,work-in-progress,wip
