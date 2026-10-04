@@ -13,29 +13,31 @@ jobs:
     if: github.repository_owner == 'marin-community'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      ISSUE_STALE_DAYS: 83
+      PR_STALE_DAYS: 23
+      CLOSE_DAYS: 7
     steps:
       - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10.3.0
         with:
           repo-token: ${{ github.token }}
           debug-only: ${{ inputs.dry-run }}
-          # Issues: warn after 83 inactive days, close 7 days later.
-          days-before-issue-stale: 83
-          days-before-issue-close: 7
-          # PRs: warn after 23 inactive days, close 7 days later.
-          days-before-pr-stale: 23
-          days-before-pr-close: 7
+          days-before-issue-stale: ${{ env.ISSUE_STALE_DAYS }}
+          days-before-issue-close: ${{ env.CLOSE_DAYS }}
+          days-before-pr-stale: ${{ env.PR_STALE_DAYS }}
+          days-before-pr-close: ${{ env.CLOSE_DAYS }}
           stale-issue-label: stale
           stale-issue-message: |
-            This issue has been inactive for 83 days and is marked as stale.
-            If there is no further activity within 7 days, it will be automatically closed.
+            This issue has been inactive for ${{ env.ISSUE_STALE_DAYS }} days and is marked as stale.
+            If there is no further activity within ${{ env.CLOSE_DAYS }} days, it will be automatically closed.
             If you believe this issue is still relevant, please add a comment to keep it open.
           close-issue-message: |
             This issue has been automatically closed due to inactivity.
             If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
           stale-pr-label: stale
           stale-pr-message: |
-            This pull request has been inactive for 23 days and is marked as stale.
-            If there is no further activity within 7 days, it will be automatically closed.
+            This pull request has been inactive for ${{ env.PR_STALE_DAYS }} days and is marked as stale.
+            If there is no further activity within ${{ env.CLOSE_DAYS }} days, it will be automatically closed.
             If you believe this PR should remain open, please add a comment or update the PR.
           close-pr-message: |
             This pull request has been automatically closed due to inactivity.
