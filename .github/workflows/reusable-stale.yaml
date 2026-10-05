@@ -1,0 +1,48 @@
+name: Shared stale policy
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: Preview labels, comments, and closures without changing issues or PRs
+        type: boolean
+        default: false
+
+jobs:
+  stale:
+    if: github.repository_owner == 'marin-community'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ISSUE_STALE_DAYS: 83
+      PR_STALE_DAYS: 23
+      CLOSE_DAYS: 7
+    steps:
+      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10.3.0
+        with:
+          repo-token: ${{ github.token }}
+          debug-only: ${{ inputs.dry-run }}
+          days-before-issue-stale: ${{ env.ISSUE_STALE_DAYS }}
+          days-before-issue-close: ${{ env.CLOSE_DAYS }}
+          days-before-pr-stale: ${{ env.PR_STALE_DAYS }}
+          days-before-pr-close: ${{ env.CLOSE_DAYS }}
+          stale-issue-label: stale
+          stale-issue-message: |
+            This issue has been inactive for ${{ env.ISSUE_STALE_DAYS }} days and is marked as stale.
+            If there is no further activity within ${{ env.CLOSE_DAYS }} days, it will be automatically closed.
+            If you believe this issue is still relevant, please add a comment to keep it open.
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity.
+            If you believe this issue is still relevant, please reopen it or create a new issue with updated information.
+          stale-pr-label: stale
+          stale-pr-message: |
+            This pull request has been inactive for ${{ env.PR_STALE_DAYS }} days and is marked as stale.
+            If there is no further activity within ${{ env.CLOSE_DAYS }} days, it will be automatically closed.
+            If you believe this PR should remain open, please add a comment or update the PR.
+          close-pr-message: |
+            This pull request has been automatically closed due to inactivity.
+            If you would like to continue working on this, please reopen it or create a new PR.
+          remove-stale-when-updated: true
+          operations-per-run: 300
+          exempt-issue-labels: pinned,security,bug,enhancement
+          exempt-pr-labels: pinned,security,work-in-progress,wip
